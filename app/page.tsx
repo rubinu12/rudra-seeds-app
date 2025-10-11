@@ -1,103 +1,125 @@
-import Image from "next/image";
+// Using some simple icons from a popular library
+import { ChevronDown, Calendar, Search, PlusCircle } from 'lucide-react';
 
-export default function Home() {
+export default function DashboardPrototype() {
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
-
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200">
+      {/* ===== HEADER / NAVBAR ===== */}
+      <header className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-6 py-3">
+        <div className="flex items-center gap-4">
+          <span className="text-xl font-bold text-blue-600">RudraSeeds</span>
         </div>
+        <div className="flex items-center gap-6 rounded-md border border-gray-300 dark:border-gray-600 p-2">
+          <button className="font-semibold text-gray-700 dark:text-gray-300">Sowing</button>
+          <button className="text-gray-500 hover:text-gray-800 dark:hover:text-gray-200">Growing</button>
+          <button className="text-gray-500 hover:text-gray-800 dark:hover:text-gray-200">Harvesting</button>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="font-medium">Year:</span>
+          <button className="flex items-center gap-1 rounded-md bg-gray-100 dark:bg-gray-700 px-3 py-1.5">
+            2025 <ChevronDown size={16} />
+          </button>
+        </div>
+      </header>
+
+      {/* ===== MAIN DASHBOARD CONTENT ===== */}
+      <main className="p-6 space-y-6">
+        
+        {/* --- Row 1: Metrics & Admin Hub --- */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+              {/* Metric Card */}
+              <div className="bg-white dark:bg-gray-800 p-5 rounded-lg shadow">
+                <h3 className="text-sm font-medium text-gray-500">Total Farmers</h3>
+                <p className="mt-2 text-3xl font-bold">45</p>
+              </div>
+              {/* Metric Card */}
+              <div className="bg-white dark:bg-gray-800 p-5 rounded-lg shadow">
+                <h3 className="text-sm font-medium text-gray-500">Area (Vigha)</h3>
+                <p className="mt-2 text-3xl font-bold">112</p>
+              </div>
+              {/* Metric Card */}
+              <div className="bg-white dark:bg-gray-800 p-5 rounded-lg shadow">
+                <h3 className="text-sm font-medium text-gray-500">Seed Disbursed (kg)</h3>
+                <p className="mt-2 text-3xl font-bold">5,600</p>
+              </div>
+              {/* Metric Card */}
+              <div className="bg-white dark:bg-gray-800 p-5 rounded-lg shadow">
+                <h3 className="text-sm font-medium text-gray-500">Active Cycles</h3>
+                <p className="mt-2 text-3xl font-bold">52</p>
+              </div>
+            </div>
+          </div>
+          {/* Admin Hub */}
+          <div className="bg-white dark:bg-gray-800 p-5 rounded-lg shadow">
+            <div className="flex items-center gap-4 border-b pb-3 mb-3">
+               <button className="font-semibold text-blue-600 border-b-2 border-blue-600 pb-3">To-Do List</button>
+               <button className="text-gray-500">Expenses</button>
+               <button className="text-gray-500"><Calendar size={20}/></button>
+            </div>
+            <ul className="space-y-2 text-sm">
+                <li className="flex items-center gap-2"><input type="checkbox" className="rounded"/> Follow up with ABC Seeds</li>
+                <li className="flex items-center gap-2"><input type="checkbox" className="rounded"/> Schedule field visits for North region</li>
+                <li className="flex items-center gap-2"><input type="checkbox" className="rounded" checked readOnly/> Pay transporter bills</li>
+            </ul>
+          </div>
+        </div>
+
+        {/* --- Row 2: Filters --- */}
+        <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow flex items-center gap-4 text-sm">
+            <span className="font-semibold">Filters:</span>
+            <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-700 p-2 rounded-md"><span>Village</span> <ChevronDown size={16}/></div>
+            <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-700 p-2 rounded-md"><span>Seed Variety</span> <ChevronDown size={16}/></div>
+            <div className="relative flex-grow">
+              <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
+              <input type="text" placeholder="Search by Farmer Name..." className="w-full bg-gray-100 dark:bg-gray-700 pl-10 p-2 rounded-md"/>
+            </div>
+            <button className="flex items-center gap-2 bg-blue-600 text-white font-semibold px-4 py-2 rounded-md hover:bg-blue-700">
+              <PlusCircle size={18} />
+              Add Crop Cycle
+            </button>
+        </div>
+
+        {/* --- Row 3: Data Table --- */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+          <table className="w-full text-sm text-left">
+            <thead className="bg-gray-50 dark:bg-gray-700 text-xs uppercase text-gray-700 dark:text-gray-400">
+              <tr>
+                <th scope="col" className="px-6 py-3">Farmer Name</th>
+                <th scope="col" className="px-6 py-3">Village</th>
+                <th scope="col" className="px-6 py-3">Seed Variety</th>
+                <th scope="col" className="px-6 py-3">Area (Vigha)</th>
+                <th scope="col" className="px-6 py-3">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
+                <td className="px-6 py-4 font-medium">Ramesh Patel</td>
+                <td className="px-6 py-4">Jamnagar</td>
+                <td className="px-6 py-4">Lokwan</td>
+                <td className="px-6 py-4">5.0</td>
+                <td className="px-6 py-4"><span className="bg-green-100 text-green-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full dark:bg-green-900 dark:text-green-300">Growing</span></td>
+              </tr>
+              <tr className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
+                <td className="px-6 py-4 font-medium">Suresh Singh</td>
+                <td className="px-6 py-4">Rajkot</td>
+                <td className="px-6 py-4">HD2967</td>
+                <td className="px-6 py-4">2.5</td>
+                <td className="px-6 py-4"><span className="bg-green-100 text-green-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full dark:bg-green-900 dark:text-green-300">Growing</span></td>
+              </tr>
+              <tr className="hover:bg-gray-50 dark:hover:bg-gray-600">
+                <td className="px-6 py-4 font-medium">Vikas Sharma</td>
+                <td className="px-6 py-4">Amreli</td>
+                <td className="px-6 py-4">Lokwan</td>
+                <td className="px-6 py-4">10.0</td>
+                <td className="px-6 py-4"><span className="bg-yellow-100 text-yellow-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full dark:bg-yellow-900 dark:text-yellow-300">Pending Visit</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
       </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
     </div>
   );
 }
