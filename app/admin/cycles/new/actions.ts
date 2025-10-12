@@ -5,13 +5,11 @@ import { sql } from '@vercel/postgres';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
-// Define a type for the return state
 type FormState = {
   message: string;
   success: boolean;
 };
 
-// This is a complex action that handles multiple database operations
 export async function createOrUpdateCycle(prevState: FormState, formData: FormData): Promise<FormState> {
   let farmerId = Number(formData.get('farmer_id'));
   let farmId = Number(formData.get('farm_id'));
@@ -28,14 +26,12 @@ export async function createOrUpdateCycle(prevState: FormState, formData: FormDa
     };
 
     if (farmerId) {
-      // Update existing farmer
       await sql`
         UPDATE farmers
         SET name = ${farmerData.name}, mobile_number = ${farmerData.mobile_number}, village = ${farmerData.village}, aadhar_number = ${farmerData.aadhar_number}, home_address = ${farmerData.home_address}, updated_at = NOW()
         WHERE farmer_id = ${farmerId}
       `;
     } else {
-      // Insert new farmer and get their ID
       const result = await sql`
         INSERT INTO farmers (name, mobile_number, village, aadhar_number, home_address, created_at, updated_at)
         VALUES (${farmerData.name}, ${farmerData.mobile_number}, ${farmerData.village}, ${farmerData.aadhar_number}, ${farmerData.home_address}, NOW(), NOW())
@@ -81,11 +77,19 @@ export async function createOrUpdateCycle(prevState: FormState, formData: FormDa
       seed_bags_purchased: Number(formData.get('seed_bags_purchased')),
       seed_cost: Number(formData.get('total_cost')),
       seed_payment_status: formData.get('payment_status') as string,
+      // --- NEWLY ADDED FIELD ---
+      goods_collection_method: formData.get('goods_collection_method') as string,
     };
 
     await sql`
-      INSERT INTO crop_cycles (farmer_id, farm_id, seed_id, sowing_date, seed_bags_purchased, seed_cost, seed_payment_status, season)
-      VALUES (${farmerId}, ${farmId}, ${cycleData.seed_id}, ${cycleData.sowing_date}, ${cycleData.seed_bags_purchased}, ${cycleData.seed_cost}, ${cycleData.seed_payment_status}, 'Rabi 2025')
+      INSERT INTO crop_cycles (
+        farmer_id, farm_id, seed_id, sowing_date, seed_bags_purchased, 
+        seed_cost, seed_payment_status, season, goods_collection_method
+      )
+      VALUES (
+        ${farmerId}, ${farmId}, ${cycleData.seed_id}, ${cycleData.sowing_date}, ${cycleData.seed_bags_purchased}, 
+        ${cycleData.seed_cost}, ${cycleData.seed_payment_status}, 'Rabi 2025', ${cycleData.goods_collection_method}
+      )
     `;
 
   } catch (error) {
@@ -93,10 +97,8 @@ export async function createOrUpdateCycle(prevState: FormState, formData: FormDa
     return { message: 'Failed to create crop cycle.', success: false };
   }
 
-  // Revalidate the dashboard path and redirect
   revalidatePath('/admin/dashboard');
   redirect('/admin/dashboard');
   
-  // This part is for TypeScript; redirect will stop execution
   return { message: 'Crop cycle created successfully.', success: true };
 }

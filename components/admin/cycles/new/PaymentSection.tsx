@@ -1,70 +1,54 @@
 // components/admin/cycles/new/PaymentSection.tsx
 "use client";
 
-import { IndianRupee } from 'lucide-react';
+import { Save, X } from 'lucide-react';
 
-type Props = {
-  totalCost: number;
-  initialSeedPrice: number;
-};
+type Props = { totalCost: number; initialSeedPrice: number; };
 
 export default function PaymentSection({ totalCost, initialSeedPrice }: Props) {
-  // Format the currency for display
   const formattedCost = new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: 'INR',
+    style: 'currency', currency: 'INR', minimumFractionDigits: 2,
   }).format(totalCost);
 
   const bags = initialSeedPrice > 0 ? Math.round(totalCost / initialSeedPrice) : 0;
 
   return (
-    <div className="form-section-card" style={{ background: 'rgba(255, 218, 214, 0.25)' }}>
-      <div className="flex items-center gap-4 mb-6">
-        <div className="bg-error-container p-3 rounded-m3-large shadow-sm">
-          <IndianRupee className="h-6 w-6 text-on-error-container" />
-        </div>
-        <h2 className="text-2xl font-normal text-on-surface">Payment Details</h2>
-      </div>
-
-      {/* Hidden input to pass the total_cost to the Server Action */}
+    // FINAL FIX: This card now contains everything for the final sidebar section.
+    <div className="bg-surface-container rounded-m3-xlarge p-6 shadow-sm">
       <input type="hidden" name="total_cost" value={totalCost} />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
-        <div>
-          <label className="form-label">Total Seed Cost</label>
-          <p className="text-4xl font-light text-on-surface">{formattedCost}</p>
-          {bags > 0 && (
-            <p className="text-xs text-on-surface-variant">
-                ({bags} bags @ ₹{initialSeedPrice.toFixed(2)}/bag)
-            </p>
-          )}
+      <div className="text-left mb-6">
+        <p className="text-base text-on-surface-variant">Total Amount</p>
+        <p className="text-5xl font-light text-on-surface leading-tight mt-1">{formattedCost}</p>
+        {bags > 0 && (
+          <p className="text-sm text-on-surface-variant mt-1">
+              ({bags} bags @ ₹{initialSeedPrice.toFixed(2)}/bag)
+          </p>
+        )}
+      </div>
+      
+      <div className="mb-8">
+        <div className="flex gap-8">
+            <label htmlFor="paid" className="flex items-center cursor-pointer">
+              <input id="paid" name="payment_status" type="radio" value="Paid" className="peer sr-only" defaultChecked />
+              <span className="w-5 h-5 border-2 border-outline rounded-full grid place-items-center peer-checked:border-primary"><span className="w-2.5 h-2.5 rounded-full bg-primary transform scale-0 peer-checked:scale-100 transition-transform"></span></span>
+              <span className="ml-2 text-on-surface">Paid</span>
+            </label>
+            <label htmlFor="credit" className="flex items-center cursor-pointer">
+              <input id="credit" name="payment_status" type="radio" value="Credit" className="peer sr-only" />
+              <span className="w-5 h-5 border-2 border-outline rounded-full grid place-items-center peer-checked:border-primary"><span className="w-2.5 h-2.5 rounded-full bg-primary transform scale-0 peer-checked:scale-100 transition-transform"></span></span>
+              <span className="ml-2 text-on-surface">Credit</span>
+            </label>
         </div>
-        <div className="h-full flex flex-col justify-center">
-          <label className="form-label mb-3">Payment Status</label>
-          <div className="flex gap-8">
-            <div className="flex items-center">
-              <input 
-                id="paid" 
-                name="payment_status" 
-                type="radio" 
-                value="Paid"
-                className="h-5 w-5 text-primary border-outline/40 focus:ring-primary" 
-                defaultChecked 
-              />
-              <label htmlFor="paid" className="ml-3 block text-on-surface text-base">Paid</label>
-            </div>
-            <div className="flex items-center">
-              <input 
-                id="credit" 
-                name="payment_status" 
-                type="radio" 
-                value="Credit"
-                className="h-5 w-5 text-primary border-outline/40 focus:ring-primary" 
-              />
-              <label htmlFor="credit" className="ml-3 block text-on-surface text-base">Credit</label>
-            </div>
-          </div>
-        </div>
+      </div>
+
+      <div className="flex flex-col gap-4">
+        <button type="submit" className="flex items-center justify-center w-full h-12 text-base font-medium rounded-m3-full text-on-primary bg-primary hover:shadow-lg transition-shadow">
+            Save & Create Cycle
+        </button>
+        <button type="button" className="flex items-center justify-center w-full h-12 text-base font-medium rounded-m3-full text-primary border border-outline hover:bg-primary/10">
+            Cancel
+        </button>
       </div>
     </div>
   );

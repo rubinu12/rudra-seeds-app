@@ -5,122 +5,74 @@ import { useState, useEffect } from 'react';
 import { FarmerDetails, Landmark, SeedVariety } from '@/lib/definitions';
 import { Tractor, PlusCircle, ChevronDown } from 'lucide-react';
 
-type Props = {
-  farmer: FarmerDetails | null;
-  landmarks: Landmark[];
-  seedVarieties: SeedVariety[];
-  onSeedBagsChange: (bags: number) => void;
-};
+// --- Local, perfectly typed sub-components for this form ---
+function Input(props: React.ComponentPropsWithoutRef<'input'> & { label: string }) {
+    const { id, label, className, ...rest } = props;
+    return (
+      <div className={`relative bg-input-bg/80 border border-outline rounded-lg h-14 focus-within:border-primary focus-within:border-2 ${className}`}>
+        <input id={id} className="w-full h-full pt-5 px-4 bg-transparent outline-none text-on-surface peer" placeholder=" " {...rest} />
+        <label htmlFor={id} className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none transition-all duration-200 peer-placeholder-shown:top-1/2 peer-placeholder-shown:text-base peer-focus:top-3.5 peer-focus:text-xs peer-focus:text-primary peer-[&:not(:placeholder-shown)]:top-3.5 peer-[&:not(:placeholder-shown)]:text-xs">
+          {label}
+        </label>
+      </div>
+    );
+}
+  
+function Select(props: React.ComponentPropsWithoutRef<'select'> & { label: string }) {
+      const { id, label, children, className, ...rest } = props;
+      return (
+          <div className={`relative bg-input-bg/80 border border-outline rounded-lg h-14 focus-within:border-primary focus-within:border-2 ${className}`}>
+              <select id={id} className="w-full h-full pt-5 px-4 bg-transparent outline-none text-on-surface peer appearance-none" {...rest}>
+                  {children}
+              </select>
+              <label htmlFor={id} className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none transition-all duration-200 peer-placeholder-shown:top-1/2 peer-placeholder-shown:text-base peer-focus:top-3.5 peer-focus:text-xs peer-focus:text-primary peer-[&:not(:placeholder-shown)]:top-3.5 peer-[&:not(:placeholder-shown)]:text-xs">
+                  {label}
+              </label>
+              <div className="absolute top-0 right-0 h-full flex items-center px-4 pointer-events-none">
+                  <ChevronDown className="h-5 w-5 text-on-surface-variant" />
+              </div>
+          </div>
+      );
+}
+
+// --- Main Component ---
+type Props = { farmer: FarmerDetails | null; landmarks: Landmark[]; seedVarieties: SeedVariety[]; onSeedBagsChange: (b: number) => void; };
 
 export default function FarmSowingForm({ farmer, landmarks, seedVarieties, onSeedBagsChange }: Props) {
-  const [isAddingNew, setIsAddingNew] = useState(false);
-  const hasExistingFarms = farmer && farmer.farms.length > 0;
-
-  useEffect(() => {
-    setIsAddingNew(!hasExistingFarms);
-  }, [farmer, hasExistingFarms]);
-
-  // Don't render if no farmer is selected
-  if (!farmer) {
-    return null;
-  }
-
   return (
-    <div className="form-section-card" style={{ background: 'rgba(255, 216, 228, 0.25)' }}>
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-4">
-          <div className="bg-tertiary-container p-3 rounded-m3-large shadow-sm">
-            <Tractor className="h-6 w-6 text-on-tertiary-container" />
-          </div>
-          <h2 className="text-2xl font-normal text-on-surface">Farm & Sowing Details</h2>
+    <div className="bg-surface-container rounded-m3-xlarge p-6 shadow-sm">
+      <div className="flex items-center gap-4 mb-6">
+        <div className="w-12 h-12 grid place-items-center rounded-2xl bg-tertiary-container">
+          <Tractor className="w-6 h-6 text-on-tertiary-container" />
         </div>
-        {hasExistingFarms && !isAddingNew && (
-            <button
-                type="button"
-                onClick={() => setIsAddingNew(true)}
-                className="btn px-4 py-2 font-medium rounded-m3-full text-tertiary-dark bg-tertiary-container/60 hover:bg-tertiary-container flex items-center gap-2 text-sm"
-            >
-                <PlusCircle className="h-4 w-4" />
-                Add New Farm
-            </button>
-        )}
+        <h2 className="text-3xl font-normal text-on-surface">Sowing Details</h2>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
-        {(hasExistingFarms && !isAddingNew) ? (
-          <>
-            {/* SELECT EXISTING FARM MODE */}
-            <div className="lg:col-span-3">
-              <label htmlFor="farm_id" className="form-label">Select Existing Farm</label>
-              <div className="relative">
-                <select id="farm_id" name="farm_id" className="form-select">
-                  <option value="">Select a farm...</option>
-                  {farmer.farms.map((farm) => (
-                    <option key={farm.farm_id} value={farm.farm_id}>
-                      {farm.location_name} ({farm.area_in_vigha} Vigha)
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 h-5 w-5 text-on-surface-variant pointer-events-none" />
-              </div>
-            </div>
-          </>
-        ) : (
-          <>
-            {/* ADD NEW FARM FORM MODE */}
-            <div>
-              <label htmlFor="location_name" className="form-label">Farm Location</label>
-              <input type="text" id="location_name" name="location_name" className="form-input" placeholder="e.g., Field near river" required />
-            </div>
-            <div>
-              <label htmlFor="landmark_id" className="form-label">Landmark</label>
-              <div className="relative">
-                <select id="landmark_id" name="landmark_id" className="form-select" required>
-                  <option value="">Select a landmark...</option>
-                  {landmarks.map(landmark => (
-                    <option key={landmark.landmark_id} value={landmark.landmark_id}>{landmark.landmark_name}</option>
-                  ))}
-                </select>
-                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 h-5 w-5 text-on-surface-variant pointer-events-none" />
-              </div>
-            </div>
-            <div>
-              <label htmlFor="area_in_vigha" className="form-label">Area of Farm (Vigha)</label>
-              <input type="number" id="area_in_vigha" name="area_in_vigha" className="form-input" placeholder="e.g., 15" required />
-            </div>
-          </>
-        )}
-
-        {/* --- Sowing Details --- */}
-        <div className="lg:col-span-3 pt-4 border-t border-outline/20 grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-4">
-            <div>
-                <label htmlFor="seed_id" className="form-label">Seed Variety</label>
-                <div className="relative">
-                    <select id="seed_id" name="seed_id" className="form-select" required>
-                        <option value="">Select a variety...</option>
-                        {seedVarieties.map(seed => (
-                          <option key={seed.seed_id} value={seed.seed_id}>{seed.variety_name}</option>
-                        ))}
-                    </select>
-                    <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 h-5 w-5 text-on-surface-variant pointer-events-none" />
-                </div>
-            </div>
-            <div>
-                <label htmlFor="seed_bags_purchased" className="form-label">Seed Bags Purchased</label>
-                <input 
-                    type="number" 
-                    id="seed_bags_purchased" 
-                    name="seed_bags_purchased" 
-                    className="form-input" 
-                    placeholder="e.g., 10"
-                    onChange={(e) => onSeedBagsChange(Number(e.target.value))}
-                    required 
-                />
-            </div>
-            <div>
-                <label htmlFor="sowing_date" className="form-label">Sowing Date</label>
-                <input type="date" id="sowing_date" name="sowing_date" className="form-input" required />
-            </div>
+      <div className="flex flex-col gap-6">
+        <Select id="landmark_id" name="landmark_id" label="Landmark" required>
+          <option value="">Select a landmark...</option>
+          {landmarks.map(l => (<option key={l.landmark_id} value={l.landmark_id}>{l.landmark_name}</option>))}
+        </Select>
+        <Select id="seed_id" name="seed_id" label="Seed Variety" required>
+          <option value="">Select a variety...</option>
+          {seedVarieties.map(s => (<option key={s.seed_id} value={s.seed_id}>{s.variety_name}</option>))}
+        </Select>
+        <Input type="number" id="seed_bags_purchased" name="seed_bags_purchased" label="Seed Bags" onChange={(e) => onSeedBagsChange(Number(e.target.value))} required />
+        <Input type="date" id="sowing_date" name="sowing_date" label="Sowing Date" defaultValue={new Date().toISOString().split('T')[0]} required />
+        <div>
+          <p className="text-sm text-on-surface-variant mb-2">Goods Collection Method</p>
+          <div className="flex gap-6">
+            <label htmlFor="pickup" className="flex items-center cursor-pointer">
+              <input id="pickup" name="goods_collection_method" type="radio" value="RudraSeeds Pickup" className="peer sr-only" defaultChecked />
+              <span className="w-5 h-5 border-2 border-outline rounded-full grid place-items-center peer-checked:border-primary"><span className="w-2.5 h-2.5 rounded-full bg-primary transform scale-0 peer-checked:scale-100 transition-transform"></span></span>
+              <span className="ml-2 text-on-surface">RudraSeeds Pickup</span>
+            </label>
+            <label htmlFor="dropoff" className="flex items-center cursor-pointer">
+              <input id="dropoff" name="goods_collection_method" type="radio" value="Farmer Drop-off" className="peer sr-only" />
+              <span className="w-5 h-5 border-2 border-outline rounded-full grid place-items-center peer-checked:border-primary"><span className="w-2.5 h-2.5 rounded-full bg-primary transform scale-0 peer-checked:scale-100 transition-transform"></span></span>
+              <span className="ml-2 text-on-surface">Farmer Drop-off</span>
+            </label>
+          </div>
         </div>
       </div>
     </div>

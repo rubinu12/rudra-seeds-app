@@ -1,92 +1,105 @@
-// components/admin/cycles/new/FarmerDetailsForm.tsx
 "use client";
 
 import { useState, useEffect } from 'react';
 import { FarmerDetails } from '@/lib/definitions';
-import { User, FilePenLine } from 'lucide-react';
+import { User, Search, LoaderCircle, X } from 'lucide-react';
+import { useDebounce } from '@/hooks/useDebounce';
 
-type Props = {
-  farmer: FarmerDetails | null;
-};
+function Input(props: React.ComponentPropsWithoutRef<'input'> & { label: string }) {
+  const { id, label, className, ...rest } = props;
+  return (
+    // FIX: Added background color to input container
+    <div className={`relative bg-input-bg/80 border border-outline rounded-lg h-14 focus-within:border-primary focus-within:border-2 ${className}`}>
+      <input id={id} className="w-full h-full pt-5 px-4 bg-transparent outline-none text-on-surface peer" placeholder=" " {...rest} />
+      <label htmlFor={id} className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none transition-all duration-200 peer-placeholder-shown:top-1/2 peer-placeholder-shown:text-base peer-focus:top-3.5 peer-focus:text-xs peer-focus:text-primary peer-[&:not(:placeholder-shown)]:top-3.5 peer-[&:not(:placeholder-shown)]:text-xs">
+        {label}
+      </label>
+    </div>
+  );
+}
 
-// A small component for our read-only display fields for cleanliness
-const DisplayField = ({ label, value }: { label: string; value: string | undefined }) => (
-  <div className="form-display-field">
-    <span className="form-display-key">{label}:</span>
-    <span className="form-display-value">{value || 'N/A'}</span>
-  </div>
-);
+function Textarea(props: React.ComponentPropsWithoutRef<'textarea'> & { label: string }) {
+    const { id, label, className, ...rest } = props;
+    return (
+      // FIX: Added background color to input container
+      <div className={`relative bg-input-bg/80 border border-outline rounded-lg focus-within:border-primary focus-within:border-2 ${className}`}>
+        <textarea id={id} className="w-full h-full py-4 px-4 bg-transparent outline-none text-on-surface peer" placeholder=" " {...rest} />
+        <label htmlFor={id} className="absolute left-4 top-4 text-on-surface-variant pointer-events-none transition-all duration-200 peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-focus:top-4 peer-focus:text-xs peer-focus:text-primary peer-[&:not(:placeholder-shown)]:top-4 peer-[&:not(:placeholder-shown)]:text-xs">
+          {label}
+        </label>
+      </div>
+    );
+  }
 
-export default function FarmerDetailsForm({ farmer }: Props) {
-  const [isEditing, setIsEditing] = useState(false);
+type FarmerSearchResult = Pick<FarmerDetails, 'farmer_id' | 'name' | 'mobile_number'>;
+type Props = { onFarmerSelect: (f: FarmerDetails | null) => void; selectedFarmer: FarmerDetails | null; };
 
-  // When a new farmer is selected from the search, reset to display mode.
-  // If no farmer is selected (cleared search), switch to edit/create mode.
+export default function FarmerDetailsForm({ onFarmerSelect, selectedFarmer }: Props) {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<FarmerSearchResult[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isDropdownOpen, setDropdownOpen] = useState(false);
+  const debouncedQuery = useDebounce(query, 300);
+
   useEffect(() => {
-    setIsEditing(farmer === null);
-  }, [farmer]);
+    const fetchFarmers = async () => {
+      if (debouncedQuery.length < 2) { setResults([]); setDropdownOpen(false); return; }
+      setIsLoading(true);
+      const res = await fetch(`/api/farmers/search?query=${debouncedQuery}`);
+      const data = await res.json();
+      setResults(data); setDropdownOpen(data.length > 0); setIsLoading(false);
+    };
+    if (!selectedFarmer) fetchFarmers();
+  }, [debouncedQuery, selectedFarmer]);
+
+  const handleSelect = async (farmer: FarmerSearchResult) => {
+    setIsLoading(true); setQuery(farmer.mobile_number); setDropdownOpen(false);
+    const res = await fetch(`/api/farmers/${farmer.farmer_id}/details`);
+    onFarmerSelect(await res.json()); setIsLoading(false);
+  };
+  
+  const handleClear = () => { onFarmerSelect(null); setQuery(''); };
+
+  useEffect(() => { if (selectedFarmer) setQuery(selectedFarmer.mobile_number); }, [selectedFarmer]);
+
+  const farmerKey = selectedFarmer?.farmer_id || 'new';
 
   return (
-    <div className="form-section-card" style={{ background: 'rgba(234, 221, 255, 0.25)' }}>
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-4">
-          <div className="bg-primary-container p-3 rounded-m3-large shadow-sm">
-            <User className="h-6 w-6 text-on-primary-container" />
-          </div>
-          <h2 className="text-2xl font-normal text-on-surface">Farmer Details</h2>
+    // FIX: Added background color to card
+    <div className="bg-surface-container rounded-m3-xlarge p-6 shadow-sm">
+      <div className="flex items-center gap-4 mb-6">
+        <div className="w-12 h-12 grid place-items-center rounded-2xl bg-primary-container">
+          <User className="w-6 h-6 text-on-primary-container" />
         </div>
-        {farmer && !isEditing && (
-          <button 
-            type="button" 
-            onClick={() => setIsEditing(true)}
-            className="btn px-4 py-2 font-medium rounded-m3-full text-primary bg-primary-container/60 hover:bg-primary-container flex items-center gap-2 text-sm"
-          >
-            <FilePenLine className="h-4 w-4" />
-            Edit
-          </button>
-        )}
+        <h2 className="text-3xl font-normal text-on-surface">Farmer & Farm Details</h2>
       </div>
 
-      {/* Hidden input to pass the farmer_id to the Server Action */}
-      {farmer && <input type="hidden" name="farmer_id" value={farmer.farmer_id} />}
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-        {isEditing ? (
-          <>
-            {/* EDITABLE FORM MODE */}
-            <div>
-              <label htmlFor="farmer_name" className="form-label">Farmer Name</label>
-              <input type="text" id="farmer_name" name="farmer_name" className="form-input" defaultValue={farmer?.name} required />
+      {selectedFarmer && <input type="hidden" name="farmer_id" value={selectedFarmer.farmer_id} />}
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="relative md:col-span-2">
+            <Input id="phone" name="mobile_number" label="Phone No." type="tel" value={query} onChange={(e) => setQuery(e.target.value)} readOnly={!!selectedFarmer} />
+            <div className="absolute top-0 right-4 h-full flex items-center z-10">
+                {isLoading && <LoaderCircle className="h-5 w-5 text-on-surface-variant animate-spin" />}
+                {!isLoading && !selectedFarmer && <Search className="h-5 w-5 text-on-surface-variant" />}
+                {selectedFarmer && (<button type="button" onClick={handleClear} className="p-1 rounded-full hover:bg-black/10"><X className="h-5 w-5 text-on-surface-variant"/></button>)}
             </div>
-            <div>
-              <label htmlFor="mobile_number" className="form-label">Mobile Number</label>
-              <input type="text" id="mobile_number" name="mobile_number" className="form-input" defaultValue={farmer?.mobile_number} required />
-            </div>
-            <div>
-              <label htmlFor="village" className="form-label">Village</label>
-              <input type="text" id="village" name="village" className="form-input" defaultValue={farmer?.village} required />
-            </div>
-            <div>
-              <label htmlFor="aadhar_number" className="form-label">Aadhar No.</label>
-              <input type="text" id="aadhar_number" name="aadhar_number" className="form-input" defaultValue={farmer?.aadhar_number} required />
-            </div>
-            <div className="md:col-span-2">
-              <label htmlFor="home_address" className="form-label">Home Address</label>
-              <textarea id="home_address" name="home_address" rows={2} className="form-input h-auto py-3" defaultValue={farmer?.home_address} required />
-            </div>
-          </>
-        ) : (
-          <>
-            {/* READ-ONLY DISPLAY MODE */}
-            <DisplayField label="Farmer Name" value={farmer?.name} />
-            <DisplayField label="Mobile" value={farmer?.mobile_number} />
-            <DisplayField label="Village" value={farmer?.village} />
-            <DisplayField label="Aadhar No" value={farmer?.aadhar_number} />
-            <div className="md:col-span-2">
-                <DisplayField label="Address" value={farmer?.home_address} />
-            </div>
-          </>
-        )}
+            {isDropdownOpen && <div className="absolute z-20 w-full mt-1 bg-surface-container border border-outline rounded-lg shadow-lg">
+                {results.map((f, i) => (
+                    <div key={f.farmer_id} onClick={() => handleSelect(f)} className={`px-4 py-3 cursor-pointer hover:bg-primary-container/50 ${i > 0 ? 'border-t border-outline/20' : ''}`}>
+                        <p className="font-medium text-on-surface">{f.name}</p>
+                        <p className="text-sm text-on-surface-variant">{f.mobile_number}</p>
+                    </div>
+                ))}
+            </div>}
+        </div>
+        
+        <Input id="farmerName" name="farmer_name" label="Name of Farmer" defaultValue={selectedFarmer?.name} key={`name-${farmerKey}`} required />
+        <Input id="village" name="village" label="Village of Farmer" defaultValue={selectedFarmer?.village} key={`village-${farmerKey}`} required />
+        <Input id="aadhar" name="aadhar_number" label="Adhar No. of Farmer" defaultValue={selectedFarmer?.aadhar_number} key={`aadhar-${farmerKey}`} required />
+        <div className="md:col-span-2"><Textarea id="farmAddress" name="farm_address" label="Farm Address" key={`farm-addr-${farmerKey}`} className="h-32" /></div>
+        <Textarea id="homeAddress" name="home_address" label="Home Address" defaultValue={selectedFarmer?.home_address} key={`home-addr-${farmerKey}`} className="h-24" required />
+        <Input id="area" name="area_in_vigha" label="Area of Farm (Vigha)" type="number" key={`area-${farmerKey}`} className="h-24" />
       </div>
     </div>
   );
