@@ -1,16 +1,24 @@
 // app/admin/cycles/new/page.tsx
 import { getLandmarks, getSeedVarieties, getCurrentSeedPrice } from '@/lib/data';
-import NewCycleForm from '@/components/admin/cycles/new/NewCycleForm';
+import { NewCycleForm } from './NewCycleForm'; // Our new smart parent component
 
+// This Server Component pre-fetches all necessary data for the form.
 export default async function NewCyclePage() {
-  // Fetch initial data on the server
-  const landmarks = await getLandmarks();
-  const seedVarieties = await getSeedVarieties();
-  const currentPrice = await getCurrentSeedPrice();
+  console.log('[SERVER] Fetching initial data for New Cycle page...');
+  
+  // Fetch all required data on the server in parallel for maximum speed.
+  const [landmarks, seedVarieties, initialSeedPrice] = await Promise.all([
+    getLandmarks(),
+    getSeedVarieties(),
+    getCurrentSeedPrice(),
+  ]);
 
+  console.log(`[SERVER] Data fetched. Rendering client form with ${landmarks.length} landmarks.`);
+
+  // Pass the server-fetched data as props to the client component.
   return (
-    <div className="space-y-6">
-      <header>
+    <>
+      <header className="max-w-7xl mx-auto mb-8">
         <h1 className="text-3xl font-normal text-on-surface">
           Start a New Sowing Cycle
         </h1>
@@ -18,15 +26,11 @@ export default async function NewCyclePage() {
           Search for an existing farmer or register a new one to begin a new crop cycle.
         </p>
       </header>
-
-      {/* We are passing the server-fetched data as props to a Client Component.
-        This is a standard and performant pattern in the Next.js App Router.
-      */}
-      <NewCycleForm 
-        landmarks={landmarks} 
+      <NewCycleForm
+        landmarks={landmarks}
         seedVarieties={seedVarieties}
-        initialSeedPrice={currentPrice}
+        initialSeedPrice={initialSeedPrice}
       />
-    </div>
+    </>
   );
 }

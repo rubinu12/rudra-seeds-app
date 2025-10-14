@@ -6,8 +6,9 @@ type Params = {
   id: string;
 };
 
-export async function GET(request: Request, context: { params: Params }) {
-  const farmerId = Number(context.params.id);
+// THE FIX: The function signature is updated from `context` to destructure `{ params }` directly.
+export async function GET(request: Request, { params }: { params: Params }) {
+  const farmerId = Number(params.id);
 
   if (isNaN(farmerId)) {
     return NextResponse.json({ error: 'Invalid farmer ID' }, { status: 400 });
