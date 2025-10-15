@@ -1,21 +1,20 @@
 // app/admin/cycles/new/page.tsx
-import { getLandmarks, getSeedVarieties, getCurrentSeedPrice } from '@/lib/data';
-import { NewCycleForm } from './NewCycleForm'; // Our new smart parent component
+import { getLandmarks, getSeedVarieties, getCurrentSeedPrice, getVillages } from '@/lib/data';
+import { NewCycleForm } from './NewCycleForm';
 
-// This Server Component pre-fetches all necessary data for the form.
 export default async function NewCyclePage() {
   console.log('[SERVER] Fetching initial data for New Cycle page...');
   
-  // Fetch all required data on the server in parallel for maximum speed.
-  const [landmarks, seedVarieties, initialSeedPrice] = await Promise.all([
+  // Fetch all required data on the server, now including villages.
+  const [landmarks, seedVarieties, initialSeedPrice, villages] = await Promise.all([
     getLandmarks(),
     getSeedVarieties(),
     getCurrentSeedPrice(),
+    getVillages(),
   ]);
 
-  console.log(`[SERVER] Data fetched. Rendering client form with ${landmarks.length} landmarks.`);
+  console.log(`[SERVER] Data fetched. Rendering client form with ${villages.length} villages.`);
 
-  // Pass the server-fetched data as props to the client component.
   return (
     <>
       <header className="max-w-7xl mx-auto mb-8">
@@ -23,12 +22,13 @@ export default async function NewCyclePage() {
           Start a New Sowing Cycle
         </h1>
         <p className="text-on-surface-variant mt-1">
-          Search for an existing farmer or register a new one to begin a new crop cycle.
+          Add a new farmer or enable search to find an existing one.
         </p>
       </header>
       <NewCycleForm
         landmarks={landmarks}
         seedVarieties={seedVarieties}
+        villages={villages}
         initialSeedPrice={initialSeedPrice}
       />
     </>

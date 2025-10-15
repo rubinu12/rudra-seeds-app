@@ -1,36 +1,44 @@
-// app/employee/dashboard/ClientPage.tsx
 "use client";
 
 import { useState, useEffect } from 'react';
-import { CropCycleForEmployee } from '@/lib/growing-data';
-import { Landmark } from '@/lib/definitions';
-import { Search, X } from 'lucide-react';
+import { CropCycleForEmployee } from '@/lib/definitions';
+import { useDebounce } from '@/hooks/useDebounce';
+import { Search, X, LoaderCircle } from 'lucide-react';
 import Link from 'next/link';
 
 type Props = {
   initialCycles: CropCycleForEmployee[];
-  landmarks: Landmark[];
-  // seedVarieties: SeedVariety[]; // Add this when you're ready to implement filters
 };
 
-export default function ClientPage({ initialCycles, landmarks }: Props) {
+export default function ClientPage({ initialCycles }: Props) {
   const [cycles, setCycles] = useState(initialCycles);
   const [isSearching, setIsSearching] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const query = e.target.value.toLowerCase();
-    if (!query) {
+  const debouncedSearchTerm = useDebounce(searchTerm, 300);
+
+  useEffect(() => {
+    if (debouncedSearchTerm) {
+      setIsLoading(true);
+      fetch(`/api/cycles/search?query=${debouncedSearchTerm}`)
+        .then(res => res.json())
+        .then(data => setCycles(data))
+        .finally(() => setIsLoading(false));
+    } else {
       setCycles(initialCycles);
-      return;
     }
-    const filtered = initialCycles.filter(cycle => 
-      cycle.farmer_name.toLowerCase().includes(query)
-    );
-    setCycles(filtered);
+  }, [debouncedSearchTerm, initialCycles]);
+
+  const handleClearSearch = () => {
+    setSearchTerm('');
+    setIsSearching(false);
+    setCycles(initialCycles);
   };
 
   return (
     <div className="max-w-xl mx-auto flex flex-col gap-6">
+      {/* Search/Filter Bar */}
       <div className="bg-surface/70 backdrop-blur-md border border-outline/30 rounded-2xl p-2">
         {/* Filter View */}
         <div className={`flex gap-2 items-center ${isSearching ? 'hidden' : ''}`}>
@@ -49,15 +57,21 @@ export default function ClientPage({ initialCycles, landmarks }: Props) {
           <input
             type="text"
             placeholder="ખેડૂતનું નામ / મોબાઇલ શોધો..."
-            onChange={handleSearch}
-            className="w-full h-12 pl-4 pr-12 rounded-full border-2 border-primary bg-surface-container text-on-surface"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full h-12 pl-4 pr-12 rounded-full border-2 border-primary bg-surface-container text-on-surface focus:ring-0 focus:outline-none"
           />
-          <button onClick={() => { setIsSearching(false); setCycles(initialCycles); }} className="absolute top-0 right-0 h-12 w-12 grid place-items-center">
-            <X className="w-5 h-5 text-on-surface-variant" />
-          </button>
+          <div className="absolute top-0 right-0 h-12 w-12 grid place-items-center">
+            {isLoading ? (
+              <LoaderCircle className="w-5 h-5 text-on-surface-variant animate-spin" />
+            ) : (
+              <X className="w-5 h-5 text-on-surface-variant cursor-pointer" onClick={handleClearSearch} />
+            )}
+          </div>
         </div>
       </div>
 
+      {/* Farmer List */}
       <section className="flex flex-col gap-4">
         {cycles.length > 0 ? (
           cycles.map(cycle => (
@@ -72,7 +86,7 @@ export default function ClientPage({ initialCycles, landmarks }: Props) {
             </div>
           ))
         ) : (
-          <p className="text-center text-on-surface-variant mt-8">કોઈ પરિણામ મળ્યું નથી.</p>
+          !isLoading && <p className="text-center text-on-surface-variant mt-8">શોધવા માટે ખેડૂતનું નામ લખો.</p>
         )}
       </section>
     </div>

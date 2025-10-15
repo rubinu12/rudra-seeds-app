@@ -18,6 +18,7 @@ export type BankAccount = {
 };
 
 export type Farm = {
+    village_id: string;
     farm_id: number;
     location_name: string;
     area_in_vigha: number;
@@ -34,6 +35,7 @@ export type FarmerDetails = {
     farms: Farm[];
 };
 
+// Type for the employee's dashboard list
 export type CropCycleForEmployee = {
   crop_cycle_id: number;
   farmer_name: string;
@@ -43,6 +45,7 @@ export type CropCycleForEmployee = {
   visit_count: number;
 };
 
+// Type for the visit form details
 export type VisitDetails = {
     visit_id: number;
     crop_cycle_id: number;
@@ -58,4 +61,9 @@ export type VisitDetails = {
     next_visit_days: number;
     farmer_cooperation: string;
     remarks: string;
+};
+
+export type Village = {
+  village_id: number;
+  village_name: string;
 };

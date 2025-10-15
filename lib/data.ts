@@ -1,8 +1,20 @@
 // lib/data.ts
 import { sql } from '@vercel/postgres';
-import { Landmark, SeedVariety, FarmerDetails, BankAccount, Farm } from './definitions';
+import { Landmark, SeedVariety, FarmerDetails, BankAccount, Farm, Village } from './definitions';
 
-// ... (getLandmarks and getSeedVarieties functions remain the same) ...
+/**
+ * Fetches a list of all villages from the database.
+ */
+export async function getVillages(): Promise<Village[]> {
+  try {
+    const data = await sql<Village>`SELECT * FROM villages ORDER BY village_name ASC`;
+    return data.rows;
+  } catch (error) {
+    console.error('Database Error:', error);
+    throw new Error('Failed to fetch villages.');
+  }
+}
+
 export async function getLandmarks(): Promise<Landmark[]> {
   try {
     const data = await sql<Landmark>`SELECT * FROM landmarks ORDER BY landmark_name ASC`;
@@ -23,20 +35,15 @@ export async function getSeedVarieties(): Promise<SeedVariety[]> {
   }
 }
 
-
 // Fetch the seed price for the current year
 export async function getCurrentSeedPrice(): Promise<number> {
     try {
         const year = new Date().getFullYear();
-        // The database may return the price as a string, so we allow for that type.
         const data = await sql<{ price_per_bag: string | number }>`
             SELECT price_per_bag FROM seed_prices WHERE year = ${year} LIMIT 1
         `;
         
         const price = data.rows[0]?.price_per_bag;
-
-        // THE FIX: Explicitly convert the fetched value to a number.
-        // If the price is null or undefined, it will default to 0.
         return Number(price) || 0;
 
     } catch (error) {
@@ -45,7 +52,6 @@ export async function getCurrentSeedPrice(): Promise<number> {
     }
 }
 
-// ... (searchFarmers and getFarmerDetails functions remain the same) ...
 export async function searchFarmers(query: string): Promise<Pick<FarmerDetails, 'farmer_id' | 'name' | 'mobile_number'>[]> {
     try {
         const data = await sql<Pick<FarmerDetails, 'farmer_id' | 'name' | 'mobile_number'>>`
