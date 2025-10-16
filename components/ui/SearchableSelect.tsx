@@ -1,3 +1,4 @@
+// components/ui/SearchableSelect.tsx
 "use client";
 
 import { useState, useRef, useEffect } from 'react';
@@ -111,7 +112,7 @@ export default function SearchableSelect({ options, value, onChange, label, name
       </div>
 
       {isOpen && (
-        <div ref={listRef} className="absolute z-10 w-full mt-1 bg-surface-container border border-outline rounded-lg shadow-lg max-h-60 overflow-y-auto">
+        <div ref={listRef} className="absolute z-50 w-full mt-1 bg-surface-container border border-outline rounded-lg shadow-lg max-h-60 overflow-y-auto">
           {filteredOptions.length > 0 ? (
             filteredOptions.map((option, index) => (
               <div

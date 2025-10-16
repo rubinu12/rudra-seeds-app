@@ -1,6 +1,9 @@
 // @/components/admin/cycles/new/PaymentSection.tsx
 "use client";
 
+import { Input } from '@/components/ui/FormInputs';
+import { useMemo } from 'react';
+
 type Props = {
     cycleState: [any, Function];
     totalCost: number;
@@ -13,7 +16,6 @@ type Props = {
 export const PaymentSection = ({ cycleState, totalCost, seedPrice, isFormValid, handleClear, state }: Props) => {
     const [cycleData, setCycleData] = cycleState;
     
-    // Format the currency for display
     const formattedCost = new Intl.NumberFormat('en-IN', { 
         style: 'currency', 
         currency: 'INR',
@@ -21,9 +23,20 @@ export const PaymentSection = ({ cycleState, totalCost, seedPrice, isFormValid, 
         maximumFractionDigits: 2,
     }).format(totalCost);
 
+    const amountRemaining = useMemo(() => {
+        if (cycleData.payment === 'Partial' && cycleData.amountPaid > 0) {
+            const remaining = totalCost - cycleData.amountPaid;
+            return remaining > 0 ? remaining : 0;
+        }
+        return 0;
+    }, [totalCost, cycleData.payment, cycleData.amountPaid]);
+
     const handleChange = (e: React.ChangeEvent<any>) => {
-        const { name, value } = e.target;
-        setCycleData((prev: any) => ({ ...prev, [name]: value }));
+        const { name, value, type } = e.target;
+        setCycleData((prev: any) => ({ 
+            ...prev, 
+            [name]: type === 'number' ? Number(value) : value 
+        }));
     };
 
     return (
@@ -38,23 +51,29 @@ export const PaymentSection = ({ cycleState, totalCost, seedPrice, isFormValid, 
             )}
 
             <div className="flex items-center gap-6 my-8">
-                <Radio 
-                    id="paid"
-                    name="payment"
-                    value="Paid"
-                    label="Paid"
-                    checked={cycleData.payment === 'Paid'}
-                    onChange={handleChange}
-                />
-                <Radio 
-                    id="credit"
-                    name="payment"
-                    value="Credit"
-                    label="Credit"
-                    checked={cycleData.payment === 'Credit'}
-                    onChange={handleChange}
-                />
+                <Radio id="paid" name="payment" value="Paid" label="Paid" checked={cycleData.payment === 'Paid'} onChange={handleChange} />
+                <Radio id="credit" name="payment" value="Credit" label="Credit" checked={cycleData.payment === 'Credit'} onChange={handleChange} />
+                <Radio id="partial" name="payment" value="Partial" label="Partial" checked={cycleData.payment === 'Partial'} onChange={handleChange} />
             </div>
+
+            {cycleData.payment === 'Partial' && (
+                <div className="space-y-4 mb-8 transition-all duration-300">
+                    <Input
+                        type="number"
+                        id="amountPaid"
+                        name="amountPaid"
+                        label="Amount Paid"
+                        value={cycleData.amountPaid || ''}
+                        onChange={handleChange}
+                        required
+                    />
+                    {cycleData.amountPaid > 0 && (
+                        <p className="text-sm text-on-surface-variant">
+                            Remaining: <span className="font-medium text-error">₹{amountRemaining.toFixed(2)}</span>
+                        </p>
+                    )}
+                </div>
+            )}
             
             <div className="flex flex-col gap-4">
                 <button 
@@ -82,12 +101,11 @@ export const PaymentSection = ({ cycleState, totalCost, seedPrice, isFormValid, 
     )
 }
 
-// Reusable Radio component for consistency
 const Radio = ({ id, label, ...props }: { id: string, label: string } & React.ComponentProps<'input'>) => (
     <label htmlFor={id} className="flex items-center cursor-pointer text-on-surface">
-        <input id={id} type="radio" className="sr-only peer" {...props} />
+        <input id={id} type="radio" className="peer sr-only" {...props} />
         <div className="w-5 h-5 border-2 border-outline rounded-full flex items-center justify-center peer-checked:border-primary">
-            <div className="w-2.5 h-2.5 rounded-full bg-primary opacity-0 peer-checked:opacity-100 transition-opacity"></div>
+            <div className="w-2.5 h-2.5 rounded-full bg-primary scale-0 peer-checked:scale-100 transition-transform"></div>
         </div>
         <span className="ml-3 font-medium">{label}</span>
     </label>

@@ -2,12 +2,16 @@
 import { getFarmerDetails } from '@/lib/data';
 import { NextResponse } from 'next/server';
 
-type Params = {
-  id: string;
+// Define a type for the context object to ensure type safety
+type RouteContext = {
+  params: {
+    id: string;
+  }
 };
 
-// THE FIX: The function signature is updated from `context` to destructure `{ params }` directly.
-export async function GET(request: Request, { params }: { params: Params }) {
+// THE FIX: The function signature is updated to correctly destructure params
+// from the second argument (the context object).
+export async function GET(request: Request, { params }: RouteContext) {
   const farmerId = Number(params.id);
 
   if (isNaN(farmerId)) {
