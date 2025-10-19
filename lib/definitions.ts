@@ -14,7 +14,6 @@ export type BankAccount = {
     account_id: number;
     account_name: string;
     account_no: string;
-    ifsc_code: string;
 };
 
 export type Farm = {
@@ -44,6 +43,29 @@ export type CropCycleForEmployee = {
   seed_variety: string;
   visit_count: number;
 };
+
+// NEW: Type for the detailed data needed on the Visit Form page
+export type CycleForVisit = {
+  crop_cycle_id: number;
+  farm_id: number;
+  farmer_name: string;
+  first_visit_date: string | null;
+  sowing_date: string;
+  farm_location: string;
+  seed_variety: string;
+  landmark_id: number;
+  landmark_name: string;
+};
+
+// NEW: Type for the list of farmers under the same landmark
+export type FarmerByLandmark = {
+    crop_cycle_id: number;
+    farmer_name: string;
+    mobile_number: string;
+    seed_variety: string;
+    farm_location: string;
+};
+
 
 // Type for the visit form details
 export type VisitDetails = {

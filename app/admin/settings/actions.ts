@@ -5,7 +5,7 @@ import { sql } from '@vercel/postgres';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
-// Define and EXPORT a universal type for our form state responses
+// Define a universal type for our form state responses
 export type FormState = {
   message: string;
   success: boolean;

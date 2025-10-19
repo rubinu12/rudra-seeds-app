@@ -24,12 +24,12 @@ export const PaymentSection = ({ cycleState, totalCost, seedPrice, isFormValid, 
     }).format(totalCost);
 
     const amountRemaining = useMemo(() => {
-        if (cycleData.payment === 'Partial' && cycleData.amountPaid > 0) {
+        if (cycleData.paymentChoice === 'Partial' && cycleData.amountPaid > 0) {
             const remaining = totalCost - cycleData.amountPaid;
             return remaining > 0 ? remaining : 0;
         }
         return 0;
-    }, [totalCost, cycleData.payment, cycleData.amountPaid]);
+    }, [totalCost, cycleData.paymentChoice, cycleData.amountPaid]);
 
     const handleChange = (e: React.ChangeEvent<any>) => {
         const { name, value, type } = e.target;
@@ -51,12 +51,12 @@ export const PaymentSection = ({ cycleState, totalCost, seedPrice, isFormValid, 
             )}
 
             <div className="flex items-center gap-6 my-8">
-                <Radio id="paid" name="payment" value="Paid" label="Paid" checked={cycleData.payment === 'Paid'} onChange={handleChange} />
-                <Radio id="credit" name="payment" value="Credit" label="Credit" checked={cycleData.payment === 'Credit'} onChange={handleChange} />
-                <Radio id="partial" name="payment" value="Partial" label="Partial" checked={cycleData.payment === 'Partial'} onChange={handleChange} />
+                <Radio id="paid" name="paymentChoice" value="Paid" label="Paid" checked={cycleData.paymentChoice === 'Paid'} onChange={handleChange} />
+                <Radio id="credit" name="paymentChoice" value="Credit" label="Credit" checked={cycleData.paymentChoice === 'Credit'} onChange={handleChange} />
+                <Radio id="partial" name="paymentChoice" value="Partial" label="Partial" checked={cycleData.paymentChoice === 'Partial'} onChange={handleChange} />
             </div>
 
-            {cycleData.payment === 'Partial' && (
+            {cycleData.paymentChoice === 'Partial' && (
                 <div className="space-y-4 mb-8 transition-all duration-300">
                     <Input
                         type="number"

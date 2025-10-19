@@ -1,6 +1,6 @@
 // app/employee/visits/[cycle_id]/page.tsx
 import { getCycleForVisit } from '@/lib/growing-data';
-import VisitForm from './VisitForm'; // We will create this client component next
+import VisitForm from './VisitForm';
 import { notFound } from 'next/navigation';
 
 type Props = {
@@ -16,14 +16,15 @@ export default async function VisitPage({ params }: Props) {
     notFound();
   }
   
-  // Fetch only the data that is truly dynamic for this page.
+  // Fetch the extended data for this page using our updated function.
+  // This now includes landmark, sowing_date, variety, etc.
   const cycleData = await getCycleForVisit(cycleId);
 
   if (!cycleData) {
     notFound();
   }
 
-  // Now, we only need to pass the cycle data to the client component.
+  // Pass the complete cycle data object to the client component.
   return (
     <VisitForm cycle={cycleData} />
   );
