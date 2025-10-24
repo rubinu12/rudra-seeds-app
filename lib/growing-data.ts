@@ -20,13 +20,14 @@ export async function getCycles(filters: CycleFilters): Promise<CropCycleForEmpl
 
     // Base query
     let queryStr = `
-        SELECT 
+        SELECT
             cc.crop_cycle_id,
             f.name as farmer_name,
             f.mobile_number,
             v.village_name as village,
             fa.location_name as farm_location,
             s.variety_name as seed_variety,
+            cc.status,
             (SELECT COUNT(*) FROM field_visits fv WHERE fv.crop_cycle_id = cc.crop_cycle_id) as visit_count
         FROM crop_cycles cc
         JOIN farmers f ON cc.farmer_id = f.farmer_id
@@ -61,7 +62,7 @@ export async function getCycles(filters: CycleFilters): Promise<CropCycleForEmpl
     }
 
     queryStr += ` ORDER BY f.name;`;
-    
+
     try {
         const { rows } = await sql.query(queryStr, params);
         return rows as CropCycleForEmployee[];
@@ -78,12 +79,13 @@ export async function getCycles(filters: CycleFilters): Promise<CropCycleForEmpl
 export async function getAssignedCycles(year: number): Promise<CropCycleForEmployee[]> {
     try {
         const data = await sql<CropCycleForEmployee>`
-            SELECT 
+            SELECT
                 cc.crop_cycle_id,
                 f.name as farmer_name,
                 v.village_name as village,
                 fa.location_name as farm_location,
                 s.variety_name as seed_variety,
+                cc.status,
                 (SELECT COUNT(*) FROM field_visits fv WHERE fv.crop_cycle_id = cc.crop_cycle_id) as visit_count
             FROM crop_cycles cc
             JOIN farmers f ON cc.farmer_id = f.farmer_id
@@ -106,19 +108,20 @@ export async function getAssignedCycles(year: number): Promise<CropCycleForEmplo
 export async function searchAllCycles(query: string, year: number): Promise<CropCycleForEmployee[]> {
     try {
         const data = await sql<CropCycleForEmployee>`
-            SELECT 
+            SELECT
                 cc.crop_cycle_id,
                 f.name as farmer_name,
                 v.village_name as village,
                 fa.location_name as farm_location,
                 s.variety_name as seed_variety,
+                cc.status,
                 (SELECT COUNT(*) FROM field_visits fv WHERE fv.crop_cycle_id = cc.crop_cycle_id) as visit_count
             FROM crop_cycles cc
             JOIN farmers f ON cc.farmer_id = f.farmer_id
             JOIN farms fa ON cc.farm_id = fa.farm_id
             JOIN seeds s ON cc.seed_id = s.seed_id
             JOIN villages v ON fa.village_id = v.village_id
-            WHERE 
+            WHERE
                 (f.name ILIKE ${'%' + query + '%'} OR f.mobile_number ILIKE ${'%' + query + '%'})
                 AND cc.crop_cycle_year = ${year}
             ORDER BY f.name;
@@ -136,7 +139,7 @@ export async function searchAllCycles(query: string, year: number): Promise<Crop
 export async function getCycleForVisit(cycleId: number): Promise<CycleForVisit | null> {
     try {
         const data = await sql`
-            SELECT 
+            SELECT
                 cc.crop_cycle_id,
                 cc.farm_id,
                 f.name as farmer_name,
@@ -153,7 +156,7 @@ export async function getCycleForVisit(cycleId: number): Promise<CycleForVisit |
             JOIN landmarks l ON fa.landmark_id = l.landmark_id
             WHERE cc.crop_cycle_id = ${cycleId};
         `;
-        
+
         if (data.rows.length === 0) {
             return null;
         }

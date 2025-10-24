@@ -3,6 +3,7 @@ import { getEmployeeMode } from '@/app/admin/settings/data';
 import HarvestingDashboard from '@/app/employee/harvesting/HarvestingDashboard';
 import ClientPage from './ClientPage';
 import { CropCycleForEmployee } from '@/lib/definitions';
+import { getCyclesToSample, getCyclesToWeigh } from '@/app/employee/harvesting/data';
 
 export default async function EmployeeDashboardPage() {
   // 1. First, check the current application mode set by the admin.
@@ -10,10 +11,17 @@ export default async function EmployeeDashboardPage() {
 
   // 2. Conditionally render the correct dashboard based on the mode.
   if (currentMode === 'Harvesting') {
-    // If in Harvesting mode, render the new HarvestingDashboard component.
-    // The dashboard itself will handle fetching its own "to-do" lists or search results.
+    // If in Harvesting mode, fetch the "to-do" lists for the employee.
+    const [cyclesToSample, cyclesToWeigh] = await Promise.all([
+      getCyclesToSample(),
+      getCyclesToWeigh(),
+    ]);
+
     return (
-      <HarvestingDashboard />
+      <HarvestingDashboard
+        cyclesToSample={cyclesToSample}
+        cyclesToWeigh={cyclesToWeigh}
+      />
     );
 
   } else {

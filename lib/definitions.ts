@@ -42,9 +42,10 @@ export type CropCycleForEmployee = {
   farm_location: string;
   seed_variety: string;
   visit_count: number;
+  status: string;
 };
 
-// NEW: Type for the detailed data needed on the Visit Form page
+// Type for the detailed data needed on the Visit Form page
 export type CycleForVisit = {
   crop_cycle_id: number;
   farm_id: number;
@@ -57,7 +58,7 @@ export type CycleForVisit = {
   landmark_name: string;
 };
 
-// NEW: Type for the list of farmers under the same landmark
+// Type for the list of farmers under the same landmark
 export type FarmerByLandmark = {
     crop_cycle_id: number;
     farmer_name: string;
@@ -88,4 +89,48 @@ export type VisitDetails = {
 export type Village = {
   village_id: number;
   village_name: string;
+};
+
+// Type for the comprehensive data needed on the Harvesting/Sample form
+export type CycleForHarvesting = {
+    crop_cycle_id: number;
+    farmer_name: string;
+    farm_location: string;
+    landmark_name: string;
+    seed_variety: string;
+    harvesting_date: string | null;
+    goods_collection_method: 'Farm' | 'Yard';
+    lot_no: string | null; // Placeholder for now
+    seed_bags_purchased: number;
+    seed_bags_returned: number | null;
+    // Existing sample data for pre-filling the form if it exists
+    sample_moisture: number | null;
+    sample_purity: number | null;
+    sample_dust: number | null; // Renamed from sample_stone
+    sample_colors: 'White' | 'Good' | 'Excellent' | null;
+    sample_non_seed: 'High' | 'Less' | 'Rare' | null;
+    sample_remarks: string | null;
+    final_price_per_man: number | null; // Renamed from final_price_per_quintal
+    total_bags_weighed: number | null;
+};
+
+// Type for the list of cycles pending sample entry (Admin Task 1)
+export type CycleForSampleEntry = {
+    crop_cycle_id: number;
+    farmer_name: string;
+    seed_variety: string;
+    sample_collection_date: string | null;
+};
+
+// NEW: Type for the list of cycles pending temporary price approval (Admin Task 2)
+export type CycleForPriceApproval = {
+    crop_cycle_id: number;
+    farmer_name: string;
+    seed_variety: string;
+    sampling_date: string | null;
+    sample_moisture: number | null;
+    sample_purity: number | null;
+    sample_dust: number | null;
+    sample_colors: string | null;
+    sample_non_seed: string | null;
 };
