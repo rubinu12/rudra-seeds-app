@@ -3,11 +3,10 @@
 
 import React, { useState, useTransition } from 'react';
 import Modal from '@/components/ui/Modal';
-import { Input } from '@/components/ui/FormInputs'; // Assuming Input is exported here
-import { CycleForPriceApproval } from '@/lib/definitions'; // Import type from definitions
+import { Input } from '@/components/ui/FormInputs';
+import { CycleForPriceApproval } from '@/lib/definitions';
 import { Save, LoaderCircle, Droplet, Percent, CircleDotDashed, Palette, ScanText } from 'lucide-react';
-// *** Step 1: Import the server action ***
-import { setTemporaryPrice, FormState } from '@/app/employee/harvesting/actions'; // Import action and FormState type
+import { setTemporaryPrice, FormState } from '@/app/employee/harvesting/actions';
 
 type Props = {
   isOpen: boolean;
@@ -15,12 +14,19 @@ type Props = {
   cycles: CycleForPriceApproval[];
 };
 
-// Removed local ActionState type, using imported FormState
-
 export default function SetTemporaryPriceModal({ isOpen, onClose, cycles }: Props) {
+  // Debug log removed
+  // console.log('--- RENDERING NEW SetTemporaryPriceModal ---', new Date().toLocaleTimeString());
+
   return (
+    // Changed title from placeholder
     <Modal isOpen={isOpen} onClose={onClose} title="Set Temporary Prices" maxWidth="max-w-xl">
-      <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2 -mr-2">
+       {/* Debug text removed */}
+      {/* <h1 className="text-red-500 font-bold text-2xl mb-4">!! NEW MODAL CODE EXECUTING !!</h1> */}
+
+      {/* Container for cycle entries - REMOVED max-h and overflow-y-auto */}
+      {/* Let the parent Modal component handle scrolling */}
+      <div className="space-y-4">
         {cycles.length > 0 ? (
           cycles.map((cycle) => (
             <CyclePriceEntry key={cycle.crop_cycle_id} cycle={cycle} />
@@ -37,37 +43,29 @@ export default function SetTemporaryPriceModal({ isOpen, onClose, cycles }: Prop
 
 // --- Sub-Component for each Cycle Entry ---
 function CyclePriceEntry({ cycle }: { cycle: CycleForPriceApproval }) {
-    const [tempPrice, setTempPrice] = useState<string>(''); // Local state for the input
+    const [tempPrice, setTempPrice] = useState<string>('');
     const [isPending, startTransition] = useTransition();
-    // Use imported FormState for action result feedback
     const [actionResult, setActionResult] = useState<FormState | null>(null);
 
     const handleSavePrice = () => {
-        // Basic client-side check (Zod validation happens in the action)
-        if (!tempPrice) {
-            setActionResult({ message: "Please enter a price.", success: false, cycleId: cycle.crop_cycle_id });
+        if (!tempPrice || Number(tempPrice) <= 0) {
+            setActionResult({ message: "Please enter a valid price greater than zero.", success: false, cycleId: cycle.crop_cycle_id });
             return;
         }
-
         const formData = new FormData();
         formData.append('cropCycleId', String(cycle.crop_cycle_id));
         formData.append('temporaryPrice', tempPrice);
 
         startTransition(async () => {
-            setActionResult(null); // Clear previous result
-            console.log("Calling setTemporaryPrice action...");
-            // *** Step 2: Replace placeholder with actual action call ***
+            setActionResult(null);
+            console.log("Calling setTemporaryPrice action for cycle:", cycle.crop_cycle_id);
             const result = await setTemporaryPrice(null, formData);
-            // *** Step 3: Use the result from the server action ***
-            setActionResult(result); // Store the result (includes message, success, cycleId)
-
+            setActionResult(result);
             if (result.success) {
-                 // Optionally disable input/button after success or rely on revalidation
-                 alert(result.message); // Simple alert for now
-                 window.location.reload(); // Simple reload until proper state management/revalidation is implemented
+                 console.log("Success:", result.message);
+                 // UI update relies on disabling + feedback message. Full list refresh requires closing/reopening or page refresh.
             } else {
                  console.error("Set Temp Price Error:", result.message, result.errors);
-                 // Error message is displayed via actionResult state below the input
             }
         });
     };
@@ -75,7 +73,7 @@ function CyclePriceEntry({ cycle }: { cycle: CycleForPriceApproval }) {
     const formatDate = (dateString: string | null): string => {
         if (!dateString) return 'N/A';
         try {
-            return new Date(dateString).toLocaleDateString('en-IN');
+            return new Date(dateString).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
         } catch { return 'Invalid Date'; }
     };
 
@@ -89,7 +87,6 @@ function CyclePriceEntry({ cycle }: { cycle: CycleForPriceApproval }) {
                     Sampled on: {formatDate(cycle.sampling_date)}
                  </p>
             </div>
-
             {/* Sample Data Display */}
             <div className="grid grid-cols-3 gap-x-3 gap-y-2 text-xs border-t border-b border-outline/10 py-2">
                 <SampleDataItem icon={Droplet} label="Moisture" value={`${cycle.sample_moisture ?? 'N/A'}%`} />
@@ -98,7 +95,6 @@ function CyclePriceEntry({ cycle }: { cycle: CycleForPriceApproval }) {
                 <SampleDataItem icon={Palette} label="Color" value={cycle.sample_colors ?? 'N/A'} />
                 <SampleDataItem icon={ScanText} label="Non-Seed" value={cycle.sample_non_seed ?? 'N/A'} />
             </div>
-
             {/* Price Input and Save Button */}
             <div className="flex items-end gap-3 pt-2">
                 <div className="flex-grow">
@@ -110,22 +106,21 @@ function CyclePriceEntry({ cycle }: { cycle: CycleForPriceApproval }) {
                         step="0.01"
                         value={tempPrice}
                         onChange={(e) => setTempPrice(e.target.value)}
-                        disabled={isPending || actionResult?.success}
+                        disabled={isPending || (actionResult?.success && actionResult?.cycleId === cycle.crop_cycle_id)}
                         required
-                        className={actionResult && !actionResult.success ? 'border-error' : ''}
+                        className={`${actionResult && !actionResult.success && actionResult?.cycleId === cycle.crop_cycle_id ? 'border-error focus-within:border-error' : ''}`}
                      />
                  </div>
                  <button
                     onClick={handleSavePrice}
-                    // Disable if pending, already succeeded, or price is invalid/empty
-                    disabled={isPending || actionResult?.success || !tempPrice || Number(tempPrice) <= 0 }
-                    className="h-[56px] px-5 btn-primary rounded-xl flex items-center justify-center gap-2 text-sm shrink-0 disabled:opacity-50 disabled:cursor-not-allowed" // Updated disabled style
+                    disabled={isPending || (actionResult?.success && actionResult?.cycleId === cycle.crop_cycle_id) || !tempPrice || Number(tempPrice) <= 0 }
+                    className="h-[56px] px-5 btn-primary rounded-xl flex items-center justify-center gap-2 text-sm shrink-0 disabled:bg-on-surface/20 disabled:text-on-surface/40 disabled:cursor-not-allowed disabled:shadow-none"
                 >
                     {isPending ? <LoaderCircle className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                     Save
                  </button>
             </div>
-             {/* Action Result Feedback - Uses result from server action */}
+             {/* Action Result Feedback */}
             {actionResult && actionResult.cycleId === cycle.crop_cycle_id && (
                  <p className={`text-xs mt-1 ${actionResult.success ? 'text-green-600' : 'text-error'}`}>
                     {actionResult.message}

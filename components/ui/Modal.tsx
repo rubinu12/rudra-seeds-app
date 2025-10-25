@@ -2,12 +2,13 @@
 "use client";
 
 import { X } from 'lucide-react';
-import React from 'react';
+import React from 'react'; // Import React
 
 type ModalProps = {
   isOpen: boolean;
   onClose: () => void;
-  title: string;
+  // *** CHANGE: title type from string to React.ReactNode ***
+  title: React.ReactNode;
   children: React.ReactNode;
   maxWidth?: string; // Optional: Allow customizing width
 };
@@ -21,6 +22,9 @@ export default function Modal({
 }: ModalProps) {
   if (!isOpen) return null;
 
+  // Determine if the title is a simple string or a more complex ReactNode
+  const isTitleString = typeof title === 'string';
+
   return (
     // Backdrop
     <div
@@ -28,7 +32,9 @@ export default function Modal({
         onClick={onClose}
         role="dialog" // Accessibility
         aria-modal="true"
-        aria-labelledby="modal-title"
+        // Use aria-label if title isn't a string, otherwise aria-labelledby
+        aria-label={!isTitleString ? 'Modal' : undefined}
+        aria-labelledby={isTitleString ? 'modal-title' : undefined}
     >
       {/* Modal Content */}
       <div
@@ -37,10 +43,17 @@ export default function Modal({
       >
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-outline/30 flex-shrink-0"> {/* Increased padding */}
-          <h2 id="modal-title" className="text-xl font-medium text-on-surface">{title}</h2> {/* Use text-xl */}
+          {/* *** CHANGE: Render title differently based on type *** */}
+          {isTitleString ? (
+            <h2 id="modal-title" className="text-xl font-medium text-on-surface">{title}</h2>
+          ) : (
+            // If title is not a string, render it directly (assuming it's a component like the custom header)
+            <div id="modal-title" className="flex-grow">{title}</div>
+          )}
           <button
               onClick={onClose}
-              className="p-2 rounded-full text-on-surface-variant hover:bg-black/10 focus:outline-none focus:ring-2 focus:ring-primary" // Standard icon button styling
+              // Adjust margin if title is complex to ensure spacing
+              className={`p-2 rounded-full text-on-surface-variant hover:bg-black/10 focus:outline-none focus:ring-2 focus:ring-primary ${!isTitleString ? 'ml-4' : ''}`} // Added ml-4 conditionally
               aria-label="Close modal"
           >
             <X className="h-6 w-6" />

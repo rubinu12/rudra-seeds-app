@@ -1,6 +1,5 @@
 // lib/definitions.ts
 
-// Add 'export' before each type definition
 export type Landmark = {
   landmark_id: number;
   landmark_name: string;
@@ -35,17 +34,27 @@ export type FarmerDetails = {
     farms: Farm[];
 };
 
-// Type for the employee's dashboard list
+// Base type for employee dashboard lists
 export type CropCycleForEmployee = {
   crop_cycle_id: number;
   farmer_name: string;
   village: string; // Village name
   farm_location: string;
   seed_variety: string;
-  visit_count: number;
   status: string;
-  goods_collection_method?: string; // Add this if needed for filtering
-  mobile_number?: string; // Add if needed
+  goods_collection_method?: string | null; // Nullable
+  mobile_number?: string | null; // Nullable
+  visit_count?: number;
+};
+
+// Extended type for Weighing List including specific fields
+export type CropCycleForEmployeeWeighing = CropCycleForEmployee & {
+    landmark_name?: string | null; // Nullable
+    seed_bags_purchased?: number | null; // Nullable
+    seed_bags_returned?: number | null; // Nullable
+    lot_no?: string | null; // Nullable
+    quantity_in_bags?: number | null; // Nullable
+    bags_remaining_to_load?: number | null; // Nullable
 };
 
 // Type for the detailed data needed on the Visit Form page
@@ -70,23 +79,25 @@ export type FarmerByLandmark = {
     farm_location: string;
 };
 
-
 // Type for the visit form details
 export type VisitDetails = {
     visit_id: number;
     crop_cycle_id: number;
-    employee_id: number;
+    employee_id: number; // Assuming employee ID exists
     visit_date: string;
-    rouging_percentage: number;
+    rouging_percentage: number | null; // Allow null
     crop_condition: string;
-    disease_data: any; // Stored as JSONB
-    irrigation_count: number;
-    fertilizer_data: any; // Stored as JSONB
-    image_url: string;
+    disease_data: any | null; // Allow null
+    irrigation_count: number | null; // Allow null
+    fertilizer_data: any | null; // Allow null
+    image_url: string | null; // Allow null
     visit_number: number;
-    next_visit_days: number;
+    next_visit_days: number | null; // Allow null
     farmer_cooperation: string;
-    remarks: string;
+    remarks: string | null; // Allow null
+    gps_latitude?: string | null; // Added based on visit action
+    gps_longitude?: string | null; // Added based on visit action
+    rouging_remaining?: number | null; // Added based on visit action
 };
 
 export type Village = {
@@ -94,30 +105,36 @@ export type Village = {
   village_name: string;
 };
 
+// *** ADDED: Generic type for simple master data items (like Landmark, Village, Company) ***
+export type MasterDataItem = {
+    id: number;
+    name: string;
+    is_active: boolean;
+};
+
 // Type for the comprehensive data needed on the Harvesting/Sample form
 export type CycleForHarvesting = {
     crop_cycle_id: number;
     farmer_name: string;
-    mobile_number: string; // Added
+    mobile_number: string | null;
     farm_location: string;
-    village_name: string; // Added
-    landmark_name: string;
+    village_name: string;
+    landmark_name: string | null;
     seed_variety: string;
     harvesting_date: string | null;
-    goods_collection_method: 'Farm' | 'Parabadi yard' | 'Dhoraji yard' | 'Jalasar yard' | string; // Updated type
+    goods_collection_method: string | null;
     lot_no: string | null;
-    seed_bags_purchased: number;
-    seed_bags_returned: number | null; // Still nullable if not tracked
-    // Existing sample data for pre-filling
+    seed_bags_purchased: number | null;
+    seed_bags_returned: number | null;
     sample_moisture: number | null;
     sample_purity: number | null;
-    sample_dust: number | null; // Mapped from dust_percentage
-    sample_colors: string | null; // Mapped from color_grade, type depends on DB
-    sample_non_seed: 'High' | 'Less' | 'Rare' | string | null; // Keep flexible or use ENUM type if defined
+    sample_dust: number | null;
+    sample_colors: string | null;
+    sample_non_seed: string | null;
     sample_remarks: string | null;
-    temporary_price_per_man: number | null; // Added
+    temporary_price_per_man: number | null;
     final_price_per_man: number | null; // Mapped from purchase_rate
-    total_bags_weighed: number | null; // Mapped from quantity_in_bags
+    total_bags_weighed: number | null; // Mapped from quantity_in_bags (synonym)
 };
 
 // Type for the list of cycles pending sample entry (Admin Task 1)
@@ -133,11 +150,11 @@ export type CycleForPriceApproval = {
     crop_cycle_id: number;
     farmer_name: string;
     seed_variety: string;
-    sampling_date: string | null; // Added
+    sampling_date: string | null;
     sample_moisture: number | null;
     sample_purity: number | null;
-    sample_dust: number | null; // Mapped from dust_percentage
-    sample_colors: string | null; // Mapped from color_grade
+    sample_dust: number | null;
+    sample_colors: string | null;
     sample_non_seed: string | null;
 };
 
@@ -145,6 +162,7 @@ export type CycleForPriceApproval = {
 export type CycleForPriceVerification = {
     crop_cycle_id: number;
     farmer_name: string;
+    mobile_number: string | null; // Ensure nullable
     seed_variety: string;
     sampling_date: string | null;
     sample_moisture: number | null;
@@ -152,5 +170,5 @@ export type CycleForPriceVerification = {
     sample_dust: number | null;
     sample_colors: string | null;
     sample_non_seed: string | null;
-    temporary_price_per_man: number | null; // Show the proposed price
+    temporary_price_per_man: number | null;
 };

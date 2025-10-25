@@ -2,7 +2,7 @@
 "use client";
 
 import Modal from '@/components/ui/Modal';
-import { CycleForSampleEntry } from '@/lib/admin-data';
+import type { CycleForSampleEntry } from '@/lib/definitions';
 import Link from 'next/link';
 import { ChevronRight, FlaskConical } from 'lucide-react';
 

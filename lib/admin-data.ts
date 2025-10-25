@@ -2,85 +2,45 @@
 "use server";
 
 import { sql } from '@vercel/postgres';
-// Import the necessary type definitions FROM lib/definitions.ts
-import {
+import type {
     CycleForSampleEntry,
     CycleForPriceApproval,
-    CycleForPriceVerification // Also import this if needed later
-} from './definitions'; // Make sure types are defined and exported here
+    CycleForPriceVerification
+} from './definitions';
 
-// --- Type Definitions (Exported or Re-exported) ---
-
-// Re-export types imported from definitions.ts if they are needed externally
-export type { CycleForSampleEntry, CycleForPriceApproval, CycleForPriceVerification };
-
-// Keep existing type exports
+// --- Type Definitions ---
+// (CyclePipelineStatus, CriticalAlertsData, FinancialOverviewData, ShipmentSummaryItem, ShipmentSummaryData remain the same)
 export type CyclePipelineStatus = {
-  total: {
-    harvested: number;
-    sampled: number;
-    priced: number;
-    weighed: number;
-  };
-  last24Hours: {
-    harvested: number;
-    sampled: number;
-    priced: number;
-    weighed: number;
-  };
+  total: { harvested: number; sampled: number; priced: number; weighed: number; };
+  last24Hours: { harvested: number; sampled: number; priced: number; weighed: number; };
 };
-
-export type CriticalAlertsData = {
-  pricedOver12DaysNotWeighed: number;
-  weighedNotLoaded: number;
-};
-
-export type FinancialOverviewData = {
-  payments: {
-    pending: number;
-    given: number;
-  };
-  cheques: {
-    dueTodayCount: number;
-    dueTodayAmount: number;
-  };
-};
-
-export type ShipmentSummaryItem = {
-    destinationCompany: string;
-    totalValueSent: number;
-    totalPaymentReceived: number;
-};
-
-export type ShipmentSummaryData = {
-    shipments: ShipmentSummaryItem[];
-    chequesToVerifyCount: number;
-};
+export type CriticalAlertsData = { pricedOver12DaysNotWeighed: number; weighedNotLoaded: number; };
+export type FinancialOverviewData = { payments: { pending: number; given: number; }; cheques: { dueTodayCount: number; dueTodayAmount: number; }; };
+export type ShipmentSummaryItem = { destinationCompany: string; totalValueSent: number; totalPaymentReceived: number; };
+export type ShipmentSummaryData = { shipments: ShipmentSummaryItem[]; chequesToVerifyCount: number; };
 
 
 // --- Data Fetching Functions ---
+// (getCyclePipelineStatus, getCriticalAlerts, getFinancialOverview, getShipmentSummary, getCyclesPendingSampleEntry, getCyclesPendingTempPrice remain the same)
 
-/**
- * Fetches aggregated counts for each stage of the harvesting pipeline.
- */
 export async function getCyclePipelineStatus(): Promise<CyclePipelineStatus> {
   try {
     const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const currentYear = new Date().getFullYear();
-
-    const result = await sql`
+    const queryText = `
       SELECT
         COUNT(*) FILTER (WHERE status = 'Harvested') as total_harvested,
         COUNT(*) FILTER (WHERE status = 'Sampled' OR status = 'Price Proposed') as total_sampled,
         COUNT(*) FILTER (WHERE status = 'Priced') as total_priced,
         COUNT(*) FILTER (WHERE status = 'Weighed') as total_weighed,
-        COUNT(*) FILTER (WHERE status = 'Harvested' AND harvesting_date >= ${twentyFourHoursAgo}) as last_24h_harvested,
-        COUNT(*) FILTER (WHERE (status = 'Sampled' OR status = 'Price Proposed') AND sampling_date >= ${twentyFourHoursAgo}) as last_24h_sampled,
-        COUNT(*) FILTER (WHERE status = 'Priced' AND pricing_date >= ${twentyFourHoursAgo}) as last_24h_priced,
-        COUNT(*) FILTER (WHERE status = 'Weighed' /* AND weighing_date >= ${twentyFourHoursAgo} */) as last_24h_weighed -- Needs weighing_date
+        COUNT(*) FILTER (WHERE status = 'Harvested' AND harvesting_date >= $1) as last_24h_harvested,
+        COUNT(*) FILTER (WHERE (status = 'Sampled' OR status = 'Price Proposed') AND sampling_date >= $1) as last_24h_sampled,
+        COUNT(*) FILTER (WHERE status = 'Priced' AND pricing_date >= $1) as last_24h_priced,
+        COUNT(*) FILTER (WHERE status = 'Weighed' /* AND weighing_date >= $1 */) as last_24h_weighed
       FROM crop_cycles
-      WHERE crop_cycle_year = ${currentYear};
+      WHERE crop_cycle_year = $2;
     `;
+    const result = await sql.query(queryText, [twentyFourHoursAgo, currentYear]);
     const data = result.rows[0];
     return {
       total: {
@@ -102,20 +62,18 @@ export async function getCyclePipelineStatus(): Promise<CyclePipelineStatus> {
   }
 }
 
-/**
- * Fetches counts for critical alerts related to harvesting delays.
- */
 export async function getCriticalAlerts(): Promise<CriticalAlertsData> {
   try {
     const twelveDaysAgo = new Date(Date.now() - 12 * 24 * 60 * 60 * 1000).toISOString();
     const currentYear = new Date().getFullYear();
-    const result = await sql`
+    const queryText = `
       SELECT
-        COUNT(*) FILTER (WHERE status = 'Priced' AND pricing_date <= ${twelveDaysAgo}) as priced_over_12_days_not_weighed,
+        COUNT(*) FILTER (WHERE status = 'Priced' AND pricing_date <= $1) as priced_over_12_days_not_weighed,
         COUNT(*) FILTER (WHERE status = 'Weighed') as weighed_not_loaded
       FROM crop_cycles
-      WHERE crop_cycle_year = ${currentYear};
+      WHERE crop_cycle_year = $2;
     `;
+    const result = await sql.query(queryText, [twelveDaysAgo, currentYear]);
     const data = result.rows[0];
     return {
       pricedOver12DaysNotWeighed: Number(data.priced_over_12_days_not_weighed) || 0,
@@ -127,25 +85,22 @@ export async function getCriticalAlerts(): Promise<CriticalAlertsData> {
   }
 }
 
-/**
- * Fetches counts and sums for the financial overview card.
- */
 export async function getFinancialOverview(): Promise<FinancialOverviewData> {
   try {
     const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
     const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999);
     const currentYear = new Date().getFullYear();
     const relevantStatusesForPayment = ['Weighed', 'Loaded', 'Dispatched', 'Completed'];
-
-    const result = await sql`
+    const queryText = `
       SELECT
-        COUNT(*) FILTER (WHERE status = ANY(ARRAY[${relevantStatusesForPayment.join(',')}]) AND (is_farmer_paid IS NULL OR is_farmer_paid = FALSE)) as payments_pending,
+        COUNT(*) FILTER (WHERE status = ANY($1) AND (is_farmer_paid IS NULL OR is_farmer_paid = FALSE)) as payments_pending,
         COUNT(*) FILTER (WHERE is_farmer_paid = TRUE) as payments_given,
-        COUNT(*) FILTER (WHERE cheque_due_date >= ${todayStart.toISOString()} AND cheque_due_date <= ${todayEnd.toISOString()}) as cheques_due_today_count,
-        SUM(final_payment) FILTER (WHERE cheque_due_date >= ${todayStart.toISOString()} AND cheque_due_date <= ${todayEnd.toISOString()}) as cheques_due_today_amount
+        COUNT(*) FILTER (WHERE cheque_due_date >= $2 AND cheque_due_date <= $3) as cheques_due_today_count,
+        SUM(final_payment) FILTER (WHERE cheque_due_date >= $2 AND cheque_due_date <= $3) as cheques_due_today_amount
       FROM crop_cycles
-      WHERE crop_cycle_year = ${currentYear};
+      WHERE crop_cycle_year = $4;
     `;
+    const result = await sql.query(queryText, [relevantStatusesForPayment, todayStart.toISOString(), todayEnd.toISOString(), currentYear]);
     const data = result.rows[0];
     return {
       payments: {
@@ -163,15 +118,14 @@ export async function getFinancialOverview(): Promise<FinancialOverviewData> {
   }
 }
 
-/**
- * Fetches aggregated data for the shipment summary card.
- */
 export async function getShipmentSummary(): Promise<ShipmentSummaryData> {
     try {
         const currentYear = new Date().getFullYear();
-        const shipmentResults = await sql`SELECT 'Placeholder Company' as destinationCompany, 0 as totalValueSent LIMIT 0`;
-        const chequesToVerifyCount = 0;
-
+        const shipmentQueryText = `SELECT 'Placeholder Company' as destinationCompany, 0 as totalValueSent LIMIT 0`;
+        const shipmentResults = await sql.query(shipmentQueryText, []);
+        const chequeQueryText = `SELECT COUNT(*) as count FROM crop_cycles WHERE /* condition for cheques to verify */ crop_cycle_year = $1 LIMIT 1`;
+        const chequeResult = await sql.query(chequeQueryText, [currentYear]);
+        const chequesToVerifyCount = Number(chequeResult.rows[0]?.count) || 0;
         return {
             shipments: shipmentResults.rows.map(row => ({
                 destinationCompany: row.destinationcompany,
@@ -180,68 +134,86 @@ export async function getShipmentSummary(): Promise<ShipmentSummaryData> {
             })),
             chequesToVerifyCount: chequesToVerifyCount,
         };
-
     } catch (error) {
         console.error('Database Error fetching shipment summary:', error);
         return { shipments: [], chequesToVerifyCount: 0 };
     }
 }
 
-/**
- * Fetches a list of crop cycles with status 'Sample Collected'.
- */
 export async function getCyclesPendingSampleEntry(): Promise<CycleForSampleEntry[]> {
     try {
         const currentYear = new Date().getFullYear();
-        const result = await sql<CycleForSampleEntry>`
+        const queryText = `
             SELECT
-                cc.crop_cycle_id,
-                f.name as farmer_name,
-                s.variety_name as seed_variety,
+                cc.crop_cycle_id, f.name as farmer_name, s.variety_name as seed_variety,
                 cc.sample_collection_date::text
             FROM crop_cycles cc
-            JOIN farmers f ON cc.farmer_id = f.farmer_id
-            JOIN seeds s ON cc.seed_id = s.seed_id
-            WHERE cc.status = 'Sample Collected'
-              AND cc.crop_cycle_year = ${currentYear}
+            JOIN farmers f ON cc.farmer_id = f.farmer_id JOIN seeds s ON cc.seed_id = s.seed_id
+            WHERE cc.status = 'Sample Collected' AND cc.crop_cycle_year = $1
             ORDER BY cc.sample_collection_date ASC NULLS FIRST;
         `;
-        return result.rows;
+        const result = await sql.query(queryText, [currentYear]);
+        return result.rows as CycleForSampleEntry[];
     } catch (error) {
         console.error('Database Error fetching cycles pending sample entry:', error);
-        return [];
+         return [];
     }
 }
 
-/**
- * Fetches cycles with status 'Sampled' for temporary price proposal. (Phase 5)
- */
 export async function getCyclesPendingTempPrice(): Promise<CycleForPriceApproval[]> {
     try {
         const currentYear = new Date().getFullYear();
-        const result = await sql<CycleForPriceApproval>`
+        const queryText = `
             SELECT
-                cc.crop_cycle_id,
-                f.name as farmer_name,
-                s.variety_name as seed_variety,
-                cc.sampling_date::text,
-                cc.sample_moisture,
-                cc.sample_purity,
-                cc.dust_percentage as sample_dust,
-                cc.color_grade as sample_colors,
+                cc.crop_cycle_id, f.name as farmer_name, s.variety_name as seed_variety,
+                cc.sampling_date::text, cc.sample_moisture, cc.sample_purity,
+                cc.dust_percentage as sample_dust, cc.color_grade as sample_colors,
                 cc.sample_non_seed
             FROM crop_cycles cc
-            JOIN farmers f ON cc.farmer_id = f.farmer_id
-            JOIN seeds s ON cc.seed_id = s.seed_id
-            WHERE cc.status = 'Sampled'
-              AND cc.crop_cycle_year = ${currentYear}
+            JOIN farmers f ON cc.farmer_id = f.farmer_id JOIN seeds s ON cc.seed_id = s.seed_id
+            WHERE cc.status = 'Sampled' AND cc.crop_cycle_year = $1
             ORDER BY cc.sampling_date ASC NULLS FIRST;
         `;
-        return result.rows;
+        const result = await sql.query(queryText, [currentYear]);
+        return result.rows as CycleForPriceApproval[];
     } catch (error) {
         console.error('Database Error fetching cycles pending temp price:', error);
         return [];
     }
 }
 
-// Add getCyclesPendingVerification function later for Phase 6
+/**
+ * Fetches cycles with status 'Price Proposed' for final verification. (Phase 6)
+ * *** Includes farmer's mobile number ***
+ */
+export async function getCyclesPendingVerification(): Promise<CycleForPriceVerification[]> {
+    try {
+        const currentYear = new Date().getFullYear();
+        const queryText = `
+            SELECT
+                cc.crop_cycle_id,
+                f.name as farmer_name,
+                f.mobile_number, -- *** ADDED mobile_number ***
+                s.variety_name as seed_variety,
+                cc.sampling_date::text,
+                cc.sample_moisture,
+                cc.sample_purity,
+                cc.dust_percentage as sample_dust,
+                cc.color_grade as sample_colors,
+                cc.sample_non_seed,
+                cc.temporary_price_per_man
+            FROM crop_cycles cc
+            JOIN farmers f ON cc.farmer_id = f.farmer_id
+            JOIN seeds s ON cc.seed_id = s.seed_id
+            WHERE cc.status = 'Price Proposed'
+              AND cc.crop_cycle_year = $1
+            ORDER BY cc.sampling_date ASC NULLS FIRST;
+        `;
+        const result = await sql.query(queryText, [currentYear]);
+        // Update the type definition if mobile_number isn't already there
+        return result.rows as CycleForPriceVerification[];
+    } catch (error) {
+        console.error('Database Error fetching cycles pending verification:', error);
+        return [];
+    }
+}

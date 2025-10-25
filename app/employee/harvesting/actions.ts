@@ -43,13 +43,37 @@ const SampleDataSchema = z.object({
     temporary_price_per_man: z.coerce.number().min(0, "Temporary price cannot be negative.").optional().nullable(),
 });
 
-// *** NEW: Schema for validating Set Temporary Price data (Phase 5) ***
+// Schema for validating Set Temporary Price data (Phase 5)
 const SetTempPriceSchema = z.object({
   cropCycleId: z.coerce.number().gt(0, { message: 'Invalid Crop Cycle ID.' }),
   temporaryPrice: z.coerce.number({ message: "Price must be a number." })
                          .min(0, { message: 'Temporary price cannot be negative.' })
-                         // Consider if price must be > 0
                          .gt(0, { message: 'Temporary price must be greater than zero.' })
+});
+
+// Schema for validating Verify Price data (Phase 6)
+const VerifyPriceSchema = z.object({
+  cropCycleId: z.coerce.number().gt(0, { message: 'Invalid Crop Cycle ID.' }),
+  finalPrice: z.coerce.number({ message: "Final price must be a number." })
+                     .min(0, { message: 'Final price cannot be negative.' })
+                     .gt(0, { message: 'Final price must be greater than zero.' })
+});
+
+// Schema for validating Weighing data (Phase 7)
+const RecordWeighingSchema = z.object({
+  cropCycleId: z.coerce.number().gt(0, { message: 'Invalid Crop Cycle ID.' }),
+  bagsWeighed: z.coerce.number({ message: "Bag count must be a number." })
+                     .int({ message: "Bag count must be a whole number." })
+                     .positive({ message: "Bag count must be greater than zero." }),
+  bagsWeighedConfirm: z.coerce.number({ message: "Confirmation must be a number." })
+                           .int({ message: "Confirmation must be a whole number." })
+                           .positive({ message: "Confirmation must be greater than zero." }),
+  // Include purchased/returned bags for calculation (passed from client)
+  seedBagsPurchased: z.coerce.number().nullable().optional(),
+  seedBagsReturned: z.coerce.number().nullable().optional(),
+}).refine(data => data.bagsWeighed === data.bagsWeighedConfirm, {
+  message: "Bag counts do not match.",
+  path: ["bagsWeighedConfirm"], // Associate error with the confirmation field
 });
 
 
@@ -84,7 +108,7 @@ export async function startHarvesting(prevState: FormState | null, formData: For
       WHERE crop_cycle_id = ${cropCycleId};
     `;
     revalidatePath('/employee/dashboard');
-    revalidatePath('/employee/harvesting');
+    revalidatePath('/employee/harvesting'); // Revalidate potential specific harvesting pages if any
     return { message: 'Crop has been marked as harvested.', success: true };
   } catch (error) {
     console.error('Database Error:', error);
@@ -116,7 +140,7 @@ export async function markSampleCollected(prevState: FormState | null, formData:
         sample_collection_date = ${sampleCollectionDate}
       WHERE crop_cycle_id = ${cropCycleId};
     `;
-    revalidatePath('/employee/dashboard');
+    revalidatePath('/employee/dashboard'); // Revalidate the dashboard where the list appears
     return { message: 'Sample has been marked as collected.', success: true };
   } catch (error) {
     console.error('Database Error:', error);
@@ -128,11 +152,12 @@ export async function markSampleCollected(prevState: FormState | null, formData:
 // Server action to process and save sample data (Phase 4)
 export async function enterSampleData(prevState: FormState | null, formData: FormData): Promise<FormState> {
     const rawData = Object.fromEntries(formData.entries());
+    // Ensure numeric fields potentially empty are treated as null for validation
     const dataToParse = {
         ...rawData,
         temporary_price_per_man: rawData.temporary_price_per_man === '' ? null : rawData.temporary_price_per_man,
         remarks: rawData.remarks === '' ? null : rawData.remarks,
-        moisture: rawData.moisture === '' ? null : rawData.moisture,
+        moisture: rawData.moisture === '' ? null : rawData.moisture, // Handle potentially empty strings
         purity: rawData.purity === '' ? null : rawData.purity,
         dust: rawData.dust === '' ? null : rawData.dust,
         colors: rawData.colors,
@@ -154,6 +179,7 @@ export async function enterSampleData(prevState: FormState | null, formData: For
     const { data } = validatedFields;
     const samplingDate = new Date().toISOString();
 
+    // Determine next status based on who entered the data and if a price was proposed
     const nextStatus = (data.userRole === 'Admin' && data.temporary_price_per_man != null && data.temporary_price_per_man > 0)
         ? 'Price Proposed'
         : 'Sampled';
@@ -179,26 +205,25 @@ export async function enterSampleData(prevState: FormState | null, formData: For
         return { message: `Database Error: Failed to save sample data. Details: ${error instanceof Error ? error.message : String(error)}`, success: false };
     }
 
+    // Revalidate paths where this data might be displayed
     revalidatePath('/employee/dashboard');
     revalidatePath('/admin/dashboard');
 
+    // Redirect based on user role
     if (data.userRole === 'Admin') {
-        redirect('/admin/dashboard');
+        redirect('/admin/dashboard'); // Redirect admin back to admin dashboard
     } else {
-        redirect('/employee/dashboard');
+        redirect('/employee/dashboard'); // Redirect employee back to employee dashboard
     }
+    // Note: Redirect might happen before revalidation completes, but Next.js handles this.
+    // Return statement is technically unreachable due to redirect but needed for type safety.
+    return { message: 'Sample data saved successfully.', success: true };
 }
 
-// *** NEW: Server Action: setTemporaryPrice (Phase 5) ***
+// Server Action: setTemporaryPrice (Phase 5)
 export async function setTemporaryPrice(prevState: FormState | null, formData: FormData): Promise<FormState> {
-
-    const validatedFields = SetTempPriceSchema.safeParse({
-        cropCycleId: formData.get('cropCycleId'),
-        temporaryPrice: formData.get('temporaryPrice')
-    });
-
-     // Add handling for empty price string before validation if needed, though coerce should handle it
-     const rawTempPrice = formData.get('temporaryPrice');
+    const rawTempPrice = formData.get('temporaryPrice');
+     // Explicit check for empty string before Zod validation
      if (rawTempPrice === '') {
          return {
              cycleId: Number(formData.get('cropCycleId')) || undefined,
@@ -206,6 +231,11 @@ export async function setTemporaryPrice(prevState: FormState | null, formData: F
              success: false,
          };
      }
+
+    const validatedFields = SetTempPriceSchema.safeParse({
+        cropCycleId: formData.get('cropCycleId'),
+        temporaryPrice: rawTempPrice // Use the raw value here for Zod coercion
+    });
 
     if (!validatedFields.success) {
         console.log("Set Temp Price Validation Errors:", validatedFields.error.flatten().fieldErrors);
@@ -221,16 +251,18 @@ export async function setTemporaryPrice(prevState: FormState | null, formData: F
     const { cropCycleId, temporaryPrice } = validatedFields.data;
 
     try {
+        // Update the temporary price and set status to 'Price Proposed'
         const result = await sql`
             UPDATE crop_cycles
             SET
                 temporary_price_per_man = ${temporaryPrice},
                 status = 'Price Proposed'
             WHERE crop_cycle_id = ${cropCycleId}
-              AND status = 'Sampled' -- Only update if status is 'Sampled'
+              AND status = 'Sampled' -- Ensure we only update cycles that are 'Sampled'
             RETURNING crop_cycle_id;
         `;
 
+        // Check if any row was actually updated
         if (result.rowCount === 0) {
              return {
                 cycleId: cropCycleId,
@@ -239,7 +271,7 @@ export async function setTemporaryPrice(prevState: FormState | null, formData: F
             };
         }
 
-        revalidatePath('/admin/dashboard');
+        revalidatePath('/admin/dashboard'); // Revalidate the admin dashboard
 
         return {
             cycleId: cropCycleId,
@@ -257,6 +289,162 @@ export async function setTemporaryPrice(prevState: FormState | null, formData: F
     }
 }
 
+// Server Action: verifyPrice (Phase 6)
+export async function verifyPrice(prevState: FormState | null, formData: FormData): Promise<FormState> {
+    const rawFinalPrice = formData.get('finalPrice');
+    // Explicit check for empty string
+    if (rawFinalPrice === '') {
+        return {
+            cycleId: Number(formData.get('cropCycleId')) || undefined,
+            message: 'Final price cannot be empty.',
+            success: false,
+        };
+    }
 
-// Placeholder/Future Server Action for Phase 6
-// export async function verifyPrice(...) { /* ... TBD in Phase 6 ... */ }
+    const validatedFields = VerifyPriceSchema.safeParse({
+        cropCycleId: formData.get('cropCycleId'),
+        finalPrice: rawFinalPrice // Use raw value for Zod coercion
+    });
+
+    if (!validatedFields.success) {
+        console.log("Verify Price Validation Errors:", validatedFields.error.flatten().fieldErrors);
+        const firstError = Object.values(validatedFields.error.flatten().fieldErrors).flat()[0];
+        return {
+            cycleId: Number(formData.get('cropCycleId')) || undefined,
+            message: firstError || 'Invalid final price entered.',
+            success: false,
+            errors: validatedFields.error.flatten().fieldErrors,
+        };
+    }
+
+    const { cropCycleId, finalPrice } = validatedFields.data;
+    const pricingDate = new Date().toISOString(); // Record when the price was finalized
+
+    try {
+        // Update the final price (purchase_rate), status, and pricing date
+        const result = await sql`
+            UPDATE crop_cycles
+            SET
+                purchase_rate = ${finalPrice}, -- Final price column
+                status = 'Priced',
+                pricing_date = ${pricingDate}   -- Set the pricing date
+            WHERE crop_cycle_id = ${cropCycleId}
+              AND status = 'Price Proposed' -- Ensure we only update cycles that are 'Price Proposed'
+            RETURNING crop_cycle_id;
+        `;
+
+        // Check if any row was updated
+        if (result.rowCount === 0) {
+             return {
+                cycleId: cropCycleId,
+                message: 'Failed to update: Cycle not found or status was not "Price Proposed".',
+                success: false,
+            };
+        }
+
+        revalidatePath('/admin/dashboard'); // Revalidate admin dashboard
+        revalidatePath('/employee/dashboard'); // Revalidate employee dashboard as status changes
+
+        return {
+            cycleId: cropCycleId,
+            message: 'Final price confirmed successfully.',
+            success: true,
+        };
+
+    } catch (error) {
+        console.error('Database Error verifying price:', error);
+        return {
+            cycleId: cropCycleId,
+            message: `Database Error: Failed to confirm price. Details: ${error instanceof Error ? error.message : String(error)}`,
+            success: false
+        };
+    }
+}
+
+
+// Server Action: recordWeighing (Phase 7)
+export async function recordWeighing(prevState: FormState | null, formData: FormData): Promise<FormState> {
+
+    // Prepare data for validation (handle potential nulls passed from client)
+    const dataToValidate = {
+        cropCycleId: formData.get('cropCycleId'),
+        bagsWeighed: formData.get('bagsWeighed'),
+        bagsWeighedConfirm: formData.get('bagsWeighedConfirm'),
+        seedBagsPurchased: formData.get('seedBagsPurchased') || null, // Default to null if missing/empty
+        seedBagsReturned: formData.get('seedBagsReturned') || null,   // Default to null if missing/empty
+    };
+
+    const validatedFields = RecordWeighingSchema.safeParse(dataToValidate);
+
+    if (!validatedFields.success) {
+        console.log("Record Weighing Validation Errors:", validatedFields.error.flatten().fieldErrors);
+        const fieldErrors = validatedFields.error.flatten().fieldErrors;
+        // Prioritize the mismatch error message if it exists
+        const firstError = fieldErrors.bagsWeighedConfirm?.[0] || Object.values(fieldErrors).flat()[0];
+        return {
+            cycleId: Number(formData.get('cropCycleId')) || undefined,
+            message: firstError || 'Invalid weighing data entered.',
+            success: false,
+            errors: fieldErrors,
+        };
+    }
+
+    const {
+        cropCycleId,
+        bagsWeighed,
+        seedBagsPurchased,
+        seedBagsReturned
+    } = validatedFields.data;
+
+    // Calculate production flag
+    const purchased = seedBagsPurchased ?? 0; // Default to 0 if null
+    const returned = seedBagsReturned ?? 0;   // Default to 0 if null
+    const finalSeedBags = purchased - returned;
+    const threshold = finalSeedBags > 0 ? finalSeedBags * 50 : 0; // Calculate threshold (50x multiplier)
+    const isProductionFlagged = threshold > 0 && bagsWeighed > threshold;
+
+    const weighingDate = new Date().toISOString();
+
+    console.log(`Recording weight for cycle ${cropCycleId}: Bags=${bagsWeighed}, Purchased=${purchased}, Returned=${returned}, Threshold=${threshold}, Flagged=${isProductionFlagged}`);
+
+    try {
+        // Update bag count, status, date, and flag
+        const result = await sql`
+            UPDATE crop_cycles
+            SET
+                quantity_in_bags = ${bagsWeighed},
+                status = 'Weighed',
+                weighing_date = ${weighingDate},
+                is_production_flagged = ${isProductionFlagged}
+            WHERE crop_cycle_id = ${cropCycleId}
+              AND status = 'Priced' -- Ensure we only update cycles that are 'Priced'
+            RETURNING crop_cycle_id;
+        `;
+
+        // Check if any row was updated
+        if (result.rowCount === 0) {
+             return {
+                cycleId: cropCycleId,
+                message: 'Failed to update: Cycle not found or status was not "Priced".',
+                success: false,
+            };
+        }
+
+        revalidatePath('/employee/dashboard'); // Revalidate employee dashboard
+        revalidatePath('/admin/dashboard');   // Revalidate admin dashboard (pipeline status changes)
+
+        return {
+            cycleId: cropCycleId,
+            message: `Weight recorded successfully (${bagsWeighed} bags). ${isProductionFlagged ? 'Production FLAGGED as high.' : ''}`,
+            success: true,
+        };
+
+    } catch (error) {
+        console.error('Database Error recording weight:', error);
+        return {
+            cycleId: cropCycleId,
+            message: `Database Error: Failed to record weight. Details: ${error instanceof Error ? error.message : String(error)}`,
+            success: false
+        };
+    }
+}
