@@ -2,10 +2,19 @@
 "use server";
 
 import { sql } from '@vercel/postgres';
+// Import the necessary type definitions FROM lib/definitions.ts
+import {
+    CycleForSampleEntry,
+    CycleForPriceApproval,
+    CycleForPriceVerification // Also import this if needed later
+} from './definitions'; // Make sure types are defined and exported here
 
-// --- Type Definitions ---
+// --- Type Definitions (Exported or Re-exported) ---
 
-// Shape of the data for the pipeline status card
+// Re-export types imported from definitions.ts if they are needed externally
+export type { CycleForSampleEntry, CycleForPriceApproval, CycleForPriceVerification };
+
+// Keep existing type exports
 export type CyclePipelineStatus = {
   total: {
     harvested: number;
@@ -17,17 +26,15 @@ export type CyclePipelineStatus = {
     harvested: number;
     sampled: number;
     priced: number;
-    weighed: number; // Assuming a 'weighing_date' column exists or logic adapts
+    weighed: number;
   };
 };
 
-// Shape of the data for the critical alerts card
 export type CriticalAlertsData = {
   pricedOver12DaysNotWeighed: number;
-  weighedNotLoaded: number; // Assumes cycles move from 'Weighed' to another status like 'Loaded'/'Dispatched'
+  weighedNotLoaded: number;
 };
 
-// Shape of the data for the financial overview card
 export type FinancialOverviewData = {
   payments: {
     pending: number;
@@ -39,24 +46,15 @@ export type FinancialOverviewData = {
   };
 };
 
-// Shape of the data for the shipment summary card
 export type ShipmentSummaryItem = {
-    destinationCompany: string; // Assuming we can join to get company name
+    destinationCompany: string;
     totalValueSent: number;
-    totalPaymentReceived: number; // This might require joining with another table
+    totalPaymentReceived: number;
 };
 
 export type ShipmentSummaryData = {
     shipments: ShipmentSummaryItem[];
-    chequesToVerifyCount: number; // Placeholder, needs verification logic definition
-};
-
-// NEW: Shape of the data for the list of cycles pending sample entry
-export type CycleForSampleEntry = {
-    crop_cycle_id: number;
-    farmer_name: string;
-    seed_variety: string;
-    sample_collection_date: string | null;
+    chequesToVerifyCount: number;
 };
 
 
@@ -73,13 +71,13 @@ export async function getCyclePipelineStatus(): Promise<CyclePipelineStatus> {
     const result = await sql`
       SELECT
         COUNT(*) FILTER (WHERE status = 'Harvested') as total_harvested,
-        COUNT(*) FILTER (WHERE status = 'Sampled') as total_sampled,
+        COUNT(*) FILTER (WHERE status = 'Sampled' OR status = 'Price Proposed') as total_sampled,
         COUNT(*) FILTER (WHERE status = 'Priced') as total_priced,
         COUNT(*) FILTER (WHERE status = 'Weighed') as total_weighed,
         COUNT(*) FILTER (WHERE status = 'Harvested' AND harvesting_date >= ${twentyFourHoursAgo}) as last_24h_harvested,
-        COUNT(*) FILTER (WHERE status = 'Sampled' AND sampling_date >= ${twentyFourHoursAgo}) as last_24h_sampled,
-        COUNT(*) FILTER (WHERE status = 'Priced' AND pricing_date >= ${twentyFourHoursAgo}) as last_24h_priced
-        -- COUNT(*) FILTER (WHERE status = 'Weighed' AND weighing_date >= ${twentyFourHoursAgo}) as last_24h_weighed -- Needs weighing_date column
+        COUNT(*) FILTER (WHERE (status = 'Sampled' OR status = 'Price Proposed') AND sampling_date >= ${twentyFourHoursAgo}) as last_24h_sampled,
+        COUNT(*) FILTER (WHERE status = 'Priced' AND pricing_date >= ${twentyFourHoursAgo}) as last_24h_priced,
+        COUNT(*) FILTER (WHERE status = 'Weighed' /* AND weighing_date >= ${twentyFourHoursAgo} */) as last_24h_weighed -- Needs weighing_date
       FROM crop_cycles
       WHERE crop_cycle_year = ${currentYear};
     `;
@@ -95,7 +93,7 @@ export async function getCyclePipelineStatus(): Promise<CyclePipelineStatus> {
         harvested: Number(data.last_24h_harvested) || 0,
         sampled: Number(data.last_24h_sampled) || 0,
         priced: Number(data.last_24h_priced) || 0,
-        weighed: 0, // Placeholder
+        weighed: Number(data.last_24h_weighed) || 0,
       },
     };
   } catch (error) {
@@ -114,7 +112,7 @@ export async function getCriticalAlerts(): Promise<CriticalAlertsData> {
     const result = await sql`
       SELECT
         COUNT(*) FILTER (WHERE status = 'Priced' AND pricing_date <= ${twelveDaysAgo}) as priced_over_12_days_not_weighed,
-        COUNT(*) FILTER (WHERE status = 'Weighed') as weighed_not_loaded -- Assumes 'Weighed' is before 'Loaded'/'Dispatched'
+        COUNT(*) FILTER (WHERE status = 'Weighed') as weighed_not_loaded
       FROM crop_cycles
       WHERE crop_cycle_year = ${currentYear};
     `;
@@ -171,15 +169,14 @@ export async function getFinancialOverview(): Promise<FinancialOverviewData> {
 export async function getShipmentSummary(): Promise<ShipmentSummaryData> {
     try {
         const currentYear = new Date().getFullYear();
-        // Placeholder implementation - requires joins and potentially another table
-        const shipmentResults = await sql`SELECT 'Placeholder Company' as destinationCompany, 0 as totalValueSent`;
-        const chequesToVerifyCount = 0; // Placeholder logic
+        const shipmentResults = await sql`SELECT 'Placeholder Company' as destinationCompany, 0 as totalValueSent LIMIT 0`;
+        const chequesToVerifyCount = 0;
 
         return {
             shipments: shipmentResults.rows.map(row => ({
                 destinationCompany: row.destinationcompany,
                 totalValueSent: Number(row.totalvaluesent) || 0,
-                totalPaymentReceived: 0, // Placeholder
+                totalPaymentReceived: 0,
             })),
             chequesToVerifyCount: chequesToVerifyCount,
         };
@@ -191,7 +188,7 @@ export async function getShipmentSummary(): Promise<ShipmentSummaryData> {
 }
 
 /**
- * NEW: Fetches a list of crop cycles with status 'Sample Collected' for the admin.
+ * Fetches a list of crop cycles with status 'Sample Collected'.
  */
 export async function getCyclesPendingSampleEntry(): Promise<CycleForSampleEntry[]> {
     try {
@@ -207,11 +204,44 @@ export async function getCyclesPendingSampleEntry(): Promise<CycleForSampleEntry
             JOIN seeds s ON cc.seed_id = s.seed_id
             WHERE cc.status = 'Sample Collected'
               AND cc.crop_cycle_year = ${currentYear}
-            ORDER BY cc.sample_collection_date ASC; -- Show oldest samples first
+            ORDER BY cc.sample_collection_date ASC NULLS FIRST;
         `;
         return result.rows;
     } catch (error) {
         console.error('Database Error fetching cycles pending sample entry:', error);
-        return []; // Return empty array on error
+        return [];
     }
 }
+
+/**
+ * Fetches cycles with status 'Sampled' for temporary price proposal. (Phase 5)
+ */
+export async function getCyclesPendingTempPrice(): Promise<CycleForPriceApproval[]> {
+    try {
+        const currentYear = new Date().getFullYear();
+        const result = await sql<CycleForPriceApproval>`
+            SELECT
+                cc.crop_cycle_id,
+                f.name as farmer_name,
+                s.variety_name as seed_variety,
+                cc.sampling_date::text,
+                cc.sample_moisture,
+                cc.sample_purity,
+                cc.dust_percentage as sample_dust,
+                cc.color_grade as sample_colors,
+                cc.sample_non_seed
+            FROM crop_cycles cc
+            JOIN farmers f ON cc.farmer_id = f.farmer_id
+            JOIN seeds s ON cc.seed_id = s.seed_id
+            WHERE cc.status = 'Sampled'
+              AND cc.crop_cycle_year = ${currentYear}
+            ORDER BY cc.sampling_date ASC NULLS FIRST;
+        `;
+        return result.rows;
+    } catch (error) {
+        console.error('Database Error fetching cycles pending temp price:', error);
+        return [];
+    }
+}
+
+// Add getCyclesPendingVerification function later for Phase 6

@@ -1,5 +1,6 @@
 // lib/definitions.ts
 
+// Add 'export' before each type definition
 export type Landmark = {
   landmark_id: number;
   landmark_name: string;
@@ -17,7 +18,7 @@ export type BankAccount = {
 };
 
 export type Farm = {
-    village_id: string;
+    village_id: string; // Keep as string if DB is varchar, or change to number if INT
     farm_id: number;
     location_name: string;
     area_in_vigha: number;
@@ -27,7 +28,7 @@ export type FarmerDetails = {
     farmer_id: number;
     name: string;
     mobile_number: string;
-    village: string;
+    village: string; // Keep village name from farmers table if that's the source
     home_address: string;
     aadhar_number: string;
     bank_accounts: BankAccount[];
@@ -38,11 +39,13 @@ export type FarmerDetails = {
 export type CropCycleForEmployee = {
   crop_cycle_id: number;
   farmer_name: string;
-  village: string;
+  village: string; // Village name
   farm_location: string;
   seed_variety: string;
   visit_count: number;
   status: string;
+  goods_collection_method?: string; // Add this if needed for filtering
+  mobile_number?: string; // Add if needed
 };
 
 // Type for the detailed data needed on the Visit Form page
@@ -87,7 +90,7 @@ export type VisitDetails = {
 };
 
 export type Village = {
-  village_id: number;
+  village_id: number; // Use number if DB is INT
   village_name: string;
 };
 
@@ -95,23 +98,26 @@ export type Village = {
 export type CycleForHarvesting = {
     crop_cycle_id: number;
     farmer_name: string;
+    mobile_number: string; // Added
     farm_location: string;
+    village_name: string; // Added
     landmark_name: string;
     seed_variety: string;
     harvesting_date: string | null;
-    goods_collection_method: 'Farm' | 'Yard';
-    lot_no: string | null; // Placeholder for now
+    goods_collection_method: 'Farm' | 'Parabadi yard' | 'Dhoraji yard' | 'Jalasar yard' | string; // Updated type
+    lot_no: string | null;
     seed_bags_purchased: number;
-    seed_bags_returned: number | null;
-    // Existing sample data for pre-filling the form if it exists
+    seed_bags_returned: number | null; // Still nullable if not tracked
+    // Existing sample data for pre-filling
     sample_moisture: number | null;
     sample_purity: number | null;
-    sample_dust: number | null; // Renamed from sample_stone
-    sample_colors: 'White' | 'Good' | 'Excellent' | null;
-    sample_non_seed: 'High' | 'Less' | 'Rare' | null;
+    sample_dust: number | null; // Mapped from dust_percentage
+    sample_colors: string | null; // Mapped from color_grade, type depends on DB
+    sample_non_seed: 'High' | 'Less' | 'Rare' | string | null; // Keep flexible or use ENUM type if defined
     sample_remarks: string | null;
-    final_price_per_man: number | null; // Renamed from final_price_per_quintal
-    total_bags_weighed: number | null;
+    temporary_price_per_man: number | null; // Added
+    final_price_per_man: number | null; // Mapped from purchase_rate
+    total_bags_weighed: number | null; // Mapped from quantity_in_bags
 };
 
 // Type for the list of cycles pending sample entry (Admin Task 1)
@@ -122,8 +128,21 @@ export type CycleForSampleEntry = {
     sample_collection_date: string | null;
 };
 
-// NEW: Type for the list of cycles pending temporary price approval (Admin Task 2)
+// Type for the list of cycles pending temporary price approval (Admin Task 2 / Phase 5)
 export type CycleForPriceApproval = {
+    crop_cycle_id: number;
+    farmer_name: string;
+    seed_variety: string;
+    sampling_date: string | null; // Added
+    sample_moisture: number | null;
+    sample_purity: number | null;
+    sample_dust: number | null; // Mapped from dust_percentage
+    sample_colors: string | null; // Mapped from color_grade
+    sample_non_seed: string | null;
+};
+
+// Type for cycles pending final price verification (Admin Task 3 / Phase 6)
+export type CycleForPriceVerification = {
     crop_cycle_id: number;
     farmer_name: string;
     seed_variety: string;
@@ -133,4 +152,5 @@ export type CycleForPriceApproval = {
     sample_dust: number | null;
     sample_colors: string | null;
     sample_non_seed: string | null;
+    temporary_price_per_man: number | null; // Show the proposed price
 };

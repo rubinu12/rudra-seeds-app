@@ -28,20 +28,21 @@ export function NewCycleForm({ landmarks, seedVarieties, villages, initialSeedPr
   const [farmerData, setFarmerData] = useState({ id: '', name: '', mobile: '', aadhar: '', address: '' });
   const [farmData, setFarmData] = useState({ id: '', location: '', area: '', villageId: '' });
   const [newBankAccounts, setNewBankAccounts] = useState([{ id: '', name: '', number: '', ifsc: '', bankName: '' }]);
-  
-  const [cycleData, setCycleData] = useState({ 
-      landmarkId: '', 
-      seedId: '', 
-      bags: 0, 
-      date: new Date().toISOString().split('T')[0], 
-      collection: 'Farm', 
+
+  // --- CORRECTION 1: Initialize state with goods_collection_method ---
+  const [cycleData, setCycleData] = useState({
+      landmarkId: '',
+      seedId: '',
+      bags: 0,
+      date: new Date().toISOString().split('T')[0],
+      goods_collection_method: 'Farm', // Changed from 'collection'
       paymentChoice: 'Paid',
       amountPaid: 0
   });
-  
+
   const [selectedFarmId, setSelectedFarmId] = useState('');
   const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([]);
-  
+
   const [showNewFarmForm, setShowNewFarmForm] = useState(false);
   const [showNewBankAccountForm, setShowNewBankAccountForm] = useState(false);
 
@@ -54,7 +55,7 @@ export function NewCycleForm({ landmarks, seedVarieties, villages, initialSeedPr
     const isFarmValid = (farmData.id || (farmData.location && farmData.area)) || selectedFarmId;
     const isBankValid = newBankAccounts.some(acc => acc.name && acc.number && acc.ifsc) || selectedAccountIds.length > 0;
     const isCycleValid = cycleData.landmarkId && cycleData.seedId && cycleData.bags > 0;
-    
+
     if (cycleData.paymentChoice === 'Partial' && (!cycleData.amountPaid || cycleData.amountPaid <= 0 || cycleData.amountPaid >= totalCost)) {
         return false;
     }
@@ -92,7 +93,8 @@ export function NewCycleForm({ landmarks, seedVarieties, villages, initialSeedPr
     setFarmerData({ id: '', name: '', mobile: '', aadhar: '', address: '' });
     setFarmData({ id: '', location: '', area: '', villageId: '' });
     setNewBankAccounts([{ id: '', name: '', number: '', ifsc: '', bankName: '' }]);
-    setCycleData({ landmarkId: '', seedId: '', bags: 0, date: new Date().toISOString().split('T')[0], collection: 'Farm', paymentChoice: 'Paid', amountPaid: 0 });
+    // --- CORRECTION (Consistency): Reset goods_collection_method ---
+    setCycleData({ landmarkId: '', seedId: '', bags: 0, date: new Date().toISOString().split('T')[0], goods_collection_method: 'Farm', paymentChoice: 'Paid', amountPaid: 0 });
     setExistingFarms([]); setExistingAccounts([]); setSelectedFarmId(''); setSelectedAccountIds([]);
     setShowNewFarmForm(false); setShowNewBankAccountForm(false); setIsSearchEnabled(false);
   };
@@ -102,7 +104,7 @@ export function NewCycleForm({ landmarks, seedVarieties, villages, initialSeedPr
   const handleToggleNewFarmForm = () => {
       setShowNewFarmForm(prev => {
           const isShowing = !prev;
-          if (isShowing) { setSelectedFarmId(''); } 
+          if (isShowing) { setSelectedFarmId(''); }
           else if (existingFarms.length > 0) { setSelectedFarmId(String(existingFarms[0].farm_id)); }
           return isShowing;
       });
@@ -110,7 +112,7 @@ export function NewCycleForm({ landmarks, seedVarieties, villages, initialSeedPr
 
   const handleToggleNewAccountForm = () => {
       setShowNewBankAccountForm(prev => {
-          if (!prev) { setNewBankAccounts([{ id: '', name: '', number: '', ifsc: '', bankName: '' }]); } 
+          if (!prev) { setNewBankAccounts([{ id: '', name: '', number: '', ifsc: '', bankName: '' }]); }
           else { setNewBankAccounts([]); }
           return !prev;
       });
@@ -127,7 +129,7 @@ export function NewCycleForm({ landmarks, seedVarieties, villages, initialSeedPr
     dataToSubmit.set('farm_address', farmData.location);
     dataToSubmit.set('area_in_vigha', farmData.area);
     dataToSubmit.set('village_id', farmData.villageId);
-    
+
     dataToSubmit.set('bank_account_ids', JSON.stringify(selectedAccountIds));
     dataToSubmit.set('new_bank_accounts', JSON.stringify(newBankAccounts.filter(acc => acc.name && acc.number)));
 
@@ -135,7 +137,8 @@ export function NewCycleForm({ landmarks, seedVarieties, villages, initialSeedPr
     dataToSubmit.set('seed_id', cycleData.seedId);
     dataToSubmit.set('seed_bags_purchased', String(cycleData.bags));
     dataToSubmit.set('sowing_date', cycleData.date);
-    dataToSubmit.set('goods_collection_method', cycleData.collection);
+    // --- CORRECTION 2: Read from cycleData.goods_collection_method ---
+    dataToSubmit.set('goods_collection_method', cycleData.goods_collection_method); // Changed from cycleData.collection
     dataToSubmit.set('payment_choice', cycleData.paymentChoice);
     dataToSubmit.set('total_cost', String(totalCost));
     dataToSubmit.set('amount_paid', String(cycleData.amountPaid));

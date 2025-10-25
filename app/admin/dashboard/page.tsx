@@ -16,12 +16,16 @@ import {
     getCriticalAlerts,
     getFinancialOverview,
     getShipmentSummary,
-    getCyclesPendingSampleEntry, // <-- Import the new function
+    getCyclesPendingSampleEntry,
+    getCyclesPendingTempPrice, // *** Import new function ***
+    // getCyclesPendingVerification,
     CyclePipelineStatus,
     CriticalAlertsData,
     FinancialOverviewData,
     ShipmentSummaryData,
-    CycleForSampleEntry // <-- Import the new type
+    CycleForSampleEntry,
+    CycleForPriceApproval // *** Import new type ***
+    // CycleForPriceVerification
 } from '@/lib/admin-data'; // Adjust path if needed
 
 // Import the card components
@@ -30,16 +34,23 @@ import CriticalAlertsCard from '@/components/admin/harvesting/CriticalAlertsCard
 import FinancialOverviewCard from '@/components/admin/harvesting/FinancialOverviewCard';
 import ShipmentSummaryCard from '@/components/admin/harvesting/ShipmentSummaryCard';
 
-// Import the new modal component
+// Import the modal components
 import SampleEntryModal from '@/components/admin/harvesting/SampleEntryModal';
+// Import placeholder/actual modal components later
+// import SetTemporaryPriceModal from '@/components/admin/harvesting/SetTemporaryPriceModal';
+// import VerifyPriceModal from '@/components/admin/harvesting/VerifyPriceModal';
+import Modal from '@/components/ui/Modal'; // Using generic Modal for placeholders
 
-// Define a type for the combined harvesting data
+
+// *** Updated HarvestingDashboardData type ***
 type HarvestingDashboardData = {
     pipelineStatus: CyclePipelineStatus;
     criticalAlerts: CriticalAlertsData;
     financialOverview: FinancialOverviewData;
     shipmentSummary: ShipmentSummaryData;
-    cyclesPendingSampleEntry: CycleForSampleEntry[]; // <-- Add the new list
+    cyclesPendingSampleEntry: CycleForSampleEntry[];
+    cyclesPendingTempPrice: CycleForPriceApproval[]; // *** Added field ***
+    // cyclesPendingVerification: CycleForPriceVerification[];
 };
 
 export default function AdminDashboardPage() {
@@ -50,9 +61,11 @@ export default function AdminDashboardPage() {
     const [isLoadingHarvestingData, setIsLoadingHarvestingData] = useState(false);
     const [errorLoadingHarvestingData, setErrorLoadingHarvestingData] = useState<string | null>(null);
 
-    // State for new modals
+    // State for Harvesting modals
     const [isSampleEntryModalOpen, setSampleEntryModalOpen] = useState(false);
-    const [isPriceApprovalModalOpen, setPriceApprovalModalOpen] = useState(false); // State for the next modal
+    const [isSetTemporaryPriceModalOpen, setSetTemporaryPriceModalOpen] = useState(false);
+    const [isVerifyPriceModalOpen, setVerifyPriceModalOpen] = useState(false);
+
 
     const handleSeasonChange = (season: Season) => {
         setActiveSeason(season);
@@ -69,26 +82,33 @@ export default function AdminDashboardPage() {
                 setIsLoadingHarvestingData(true);
                 setErrorLoadingHarvestingData(null);
                 try {
-                    // Fetch all data in parallel, including the new list
+                    // Fetch all required data in parallel
                     const [
                         pipelineStatus,
                         criticalAlerts,
                         financialOverview,
                         shipmentSummary,
-                        cyclesPendingSampleEntry // <-- Fetch the new data
+                        cyclesPendingSampleEntry,
+                        cyclesPendingTempPrice // *** Fetch new data ***
+                        // cyclesPendingVerification
                     ] = await Promise.all([
                         getCyclePipelineStatus(),
                         getCriticalAlerts(),
                         getFinancialOverview(),
                         getShipmentSummary(),
-                        getCyclesPendingSampleEntry() // <-- Call the new function
+                        getCyclesPendingSampleEntry(),
+                        getCyclesPendingTempPrice() // *** Call new function ***
+                        // getCyclesPendingVerification() // Add later
                     ]);
+                    // *** Store new data in state ***
                     setHarvestingData({
                         pipelineStatus,
                         criticalAlerts,
                         financialOverview,
                         shipmentSummary,
-                        cyclesPendingSampleEntry // <-- Store the new data
+                        cyclesPendingSampleEntry,
+                        cyclesPendingTempPrice
+                        // cyclesPendingVerification // Add later
                     });
                 } catch (error) {
                     console.error("Failed to fetch harvesting dashboard data:", error);
@@ -99,26 +119,24 @@ export default function AdminDashboardPage() {
             };
             fetchData();
         }
-    }, [activeSeason, harvestingData, isLoadingHarvestingData]);
+    }, [activeSeason, isLoadingHarvestingData, harvestingData]);
 
 
     // Renders content based on the active season
     const renderContent = () => {
         switch (activeSeason) {
             case 'Harvesting':
-                 // Layout similar to Sowing: WelcomeHeader + 2x2 Grid + Sidebar
                 return (
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                         <div className="lg:col-span-2 space-y-6">
-                            {/* WelcomeHeader now correctly receives the function to open the modal */}
                             <WelcomeHeader
                                 onAddLandmarkClick={() => setLandmarkModalOpen(true)}
                                 onAddVarietyClick={() => setVarietyModalOpen(true)}
-                                onEnterSampleDataClick={() => setSampleEntryModalOpen(true)} // <-- Connected
-                                onApprovePricesClick={() => setPriceApprovalModalOpen(true)} // <-- Connected (for future modal)
+                                onEnterSampleDataClick={() => setSampleEntryModalOpen(true)}
+                                onSetTemporaryPriceClick={() => setSetTemporaryPriceModalOpen(true)} // Connected
+                                onVerifyPriceClick={() => setVerifyPriceModalOpen(true)} // Connected
                                 activeSeason={activeSeason}
                             />
-                            {/* 2x2 Metric Grid */}
                             {isLoadingHarvestingData ? (
                                 <div className="flex justify-center items-center h-64">
                                     <LoaderCircle className="w-12 h-12 text-primary animate-spin" />
@@ -137,35 +155,29 @@ export default function AdminDashboardPage() {
                             ) : null}
                         </div>
                         <div className="lg:col-span-1">
-                            {/* Sidebar included in Harvesting view */}
                             <Sidebar />
                         </div>
                     </div>
                 );
-
-            case 'Growing':
+            // ... (Growing and Sowing cases remain the same) ...
+             case 'Growing':
                   return (
-                      <div className="bg-surface/70 backdrop-blur-md border border-outline/30 rounded-m3-large p-10 text-center text-on-surface-variant">
+                      <div className="bg-surface/70 backdrop-blur-md border border-outline/30 rounded-lg p-10 text-center text-on-surface-variant">
                           This is the Growing Dashboard View. (Placeholder)
                       </div>
                   );
             case 'Sowing':
             default:
-                // Original Sowing dashboard layout remains the same structure
                 return (
                     <>
-                        <div className="bg-surface/70 backdrop-blur-md border border-outline/30 rounded-m3-full p-1 flex items-center">
-                            {/* Search bar... */}
-                            <Search className="mx-3 text-on-surface-variant" />
-                            <input type="text" placeholder="Search..." className="w-full bg-transparent focus:outline-none text-on-surface-variant placeholder:text-on-surface-variant" />
-                        </div>
                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                             <div className="lg:col-span-2 space-y-6">
                                 <WelcomeHeader
                                     onAddLandmarkClick={() => setLandmarkModalOpen(true)}
                                     onAddVarietyClick={() => setVarietyModalOpen(true)}
                                     onEnterSampleDataClick={() => {}} // No-op
-                                    onApprovePricesClick={() => {}} // No-op
+                                    onSetTemporaryPriceClick={() => {}} // No-op
+                                    onVerifyPriceClick={() => {}} // No-op
                                     activeSeason={activeSeason}
                                 />
                                 <KeyMetrics />
@@ -190,15 +202,38 @@ export default function AdminDashboardPage() {
             <AddLandmarkModal isOpen={isLandmarkModalOpen} onClose={() => setLandmarkModalOpen(false)} />
             <AddVarietyModal isOpen={isVarietyModalOpen} onClose={() => setVarietyModalOpen(false)} />
 
-            {/* New Sample Entry Modal - Rendered and connected */}
+            {/* Harvesting Modals */}
             <SampleEntryModal
                 isOpen={isSampleEntryModalOpen}
                 onClose={() => setSampleEntryModalOpen(false)}
-                cycles={harvestingData?.cyclesPendingSampleEntry || []} // Pass the fetched data (or empty array)
+                cycles={harvestingData?.cyclesPendingSampleEntry || []}
             />
 
-            {/* Placeholder for Price Approval Modal */}
-            {/* <PriceApprovalModal isOpen={isPriceApprovalModalOpen} onClose={() => setPriceApprovalModalOpen(false)} /> */}
+            {/* Placeholder Modal for Set Temp Price - now receives data */}
+            <Modal
+                isOpen={isSetTemporaryPriceModalOpen}
+                onClose={() => setSetTemporaryPriceModalOpen(false)}
+                title="Set Temporary Price (Placeholder)"
+                maxWidth="max-w-2xl" // Wider modal might be needed
+            >
+                <p>List of cycles with status 'Sampled' will appear here ({harvestingData?.cyclesPendingTempPrice?.length || 0} found).</p>
+                 {/* Pass data like: cycles={harvestingData?.cyclesPendingTempPrice || []} */}
+                 {/* Temp display to verify data fetch */}
+                 <pre className="text-xs max-h-60 overflow-auto bg-surface p-2 rounded mt-4">
+                    {JSON.stringify(harvestingData?.cyclesPendingTempPrice, null, 2)}
+                 </pre>
+            </Modal>
+
+            {/* Placeholder Modal for Verify Price */}
+            <Modal
+                isOpen={isVerifyPriceModalOpen}
+                onClose={() => setVerifyPriceModalOpen(false)}
+                title="Verify Price (Placeholder)"
+                maxWidth="max-w-2xl"
+            >
+                 <p>List of cycles with status 'Price Proposed' will appear here.</p>
+                 {/* Pass data like: cycles={harvestingData?.cyclesPendingVerification || []} */}
+            </Modal>
         </>
     );
 }

@@ -22,7 +22,14 @@ export const SowingSection = ({ cycleState, landmarkOptions, seedVarietyOptions 
     const handleSelectChange = (name: string) => (value: string) => {
         setCycleData((prev: any) => ({ ...prev, [name]: value }));
     };
-    
+
+    // Define the specific yard options
+    const yardOptions = [
+        { id: 'parabadi', value: 'Parabadi yard', label: 'Parabadi yard' },
+        { id: 'dhoraji', value: 'Dhoraji yard', label: 'Dhoraji yard' },
+        { id: 'jalansar', value: 'Jalansar yard', label: 'Jalansar yard' },
+    ];
+
     return (
         <div className="bg-surface-container rounded-[1.75rem] p-6 shadow-md">
           <div className="flex items-center gap-4 mb-6">
@@ -31,7 +38,7 @@ export const SowingSection = ({ cycleState, landmarkOptions, seedVarietyOptions 
               </div>
               <h2 className="text-[1.75rem] font-normal text-on-surface">Sowing Details</h2>
           </div>
-          
+
           <div className="flex flex-col gap-4">
               <SearchableSelect
                   id="landmarkId"
@@ -49,44 +56,49 @@ export const SowingSection = ({ cycleState, landmarkOptions, seedVarietyOptions 
                   value={cycleData.seedId}
                   onChange={handleSelectChange('seedId')}
               />
-              <Input 
-                type="number" 
-                id="bags" 
-                name="bags" 
-                label="Seed Bags" 
-                value={cycleData.bags} 
-                onChange={handleValueChange} 
-                required 
-                onWheel={(e) => (e.target as HTMLElement).blur()} 
+              <Input
+                type="number"
+                id="bags"
+                name="bags"
+                label="Seed Bags"
+                value={cycleData.bags}
+                onChange={handleValueChange}
+                required
+                onWheel={(e) => (e.target as HTMLElement).blur()}
               />
-              <Input 
-                type="date" 
-                id="date" 
-                name="date" 
-                label="Sowing Date" 
-                value={cycleData.date} 
-                onChange={handleValueChange} 
-                required 
+              <Input
+                type="date"
+                id="date"
+                name="date"
+                label="Sowing Date"
+                value={cycleData.date}
+                onChange={handleValueChange}
+                required
               />
+              {/* --- UPDATED Goods Collection Method --- */}
               <div>
                   <p className="text-sm font-medium text-on-surface-variant mb-3">Goods Collection Method</p>
-                  <div className="flex items-center gap-6">
-                      <Radio 
-                        id="pickup" 
-                        name="collection" 
-                        value="Farm" 
+                  <div className="flex flex-col gap-3"> {/* Changed to flex-col for better layout */}
+                      <Radio
+                        id="collection_farm" // Changed ID
+                        name="goods_collection_method" // Changed name to match action
+                        value="Farm"
                         label="Farm"
-                        checked={cycleData.collection === 'Farm'}
+                        checked={cycleData.goods_collection_method === 'Farm'} // Use correct state property
                         onChange={handleValueChange}
                       />
-                      <Radio 
-                        id="dropoff" 
-                        name="collection" 
-                        value="Yard" 
-                        label="Yard"
-                        checked={cycleData.collection === 'Yard'}
-                        onChange={handleValueChange}
-                      />
+                      {/* Map through the yard options */}
+                      {yardOptions.map(yard => (
+                        <Radio
+                          key={yard.id}
+                          id={`collection_${yard.id}`}
+                          name="goods_collection_method" // Changed name to match action
+                          value={yard.value}
+                          label={yard.label}
+                          checked={cycleData.goods_collection_method === yard.value} // Use correct state property
+                          onChange={handleValueChange}
+                        />
+                      ))}
                   </div>
               </div>
         </div>
