@@ -24,7 +24,9 @@ export async function getCyclesToSample(): Promise<CropCycleForEmployeeWeighing[
         cc.goods_collection_method,
         cc.seed_bags_purchased,
         cc.seed_bags_returned,
-        cc.lot_no
+        cc.lot_no,
+        cc.quantity_in_bags,       -- Added for context if needed elsewhere
+        cc.bags_remaining_to_load  -- Added for context if needed elsewhere
       FROM crop_cycles cc
       JOIN farmers f ON cc.farmer_id = f.farmer_id
       JOIN farms fa ON cc.farm_id = fa.farm_id
@@ -53,11 +55,13 @@ export async function getCyclesToSample(): Promise<CropCycleForEmployeeWeighing[
 }
 
 /**
- * Fetches crop cycles that have been priced but not yet weighed.
- * Includes additional fields for weighing logic and display.
+ * MODIFIED FOR PHASE 8 (LOADING): Fetches crop cycles that have status 'Weighed'
+ * AND have bags remaining to load. Includes all necessary fields for the loading form.
+ * *** No longer filters by location on the server. ***
  */
 export async function getCyclesToWeigh(): Promise<CropCycleForEmployeeWeighing[]> {
   try {
+    const currentYear = new Date().getFullYear(); // Ensure we only get current year cycles
     const data = await sql<CropCycleForEmployeeWeighing>`
       SELECT
         cc.crop_cycle_id,
@@ -65,22 +69,27 @@ export async function getCyclesToWeigh(): Promise<CropCycleForEmployeeWeighing[]
         f.mobile_number,
         v.village_name as village,
         fa.location_name as farm_location,
-        l.landmark_name,          -- Already added
+        l.landmark_name,
         s.variety_name as seed_variety,
         cc.status,
         cc.goods_collection_method,
-        cc.seed_bags_purchased,   -- Already added
-        cc.seed_bags_returned,    -- Already added
-        cc.lot_no                 -- Already added
+        cc.seed_bags_purchased,
+        cc.seed_bags_returned,
+        cc.lot_no,
+        cc.quantity_in_bags,       -- Total bags weighed
+        cc.bags_remaining_to_load  -- Bags available to load
       FROM crop_cycles cc
       JOIN farmers f ON cc.farmer_id = f.farmer_id
       JOIN farms fa ON cc.farm_id = fa.farm_id
       JOIN seeds s ON cc.seed_id = s.seed_id
       JOIN villages v ON fa.village_id = v.village_id
       LEFT JOIN landmarks l ON fa.landmark_id = l.landmark_id
-      WHERE cc.status = 'Priced'
-      ORDER BY cc.pricing_date ASC NULLS LAST;
+      WHERE cc.status = 'Weighed'
+        AND cc.bags_remaining_to_load > 0 -- Only fetch cycles with bags left to load
+        AND cc.crop_cycle_year = ${currentYear} -- Filter by current year
+      ORDER BY cc.weighing_date ASC NULLS LAST; -- Order by weighing date
     `;
+    // Apply default for goods_collection_method if null
     const rowsWithDefaults = data.rows.map(cycle => ({
         ...cycle,
         goods_collection_method: cycle.goods_collection_method || 'Farm'
@@ -88,6 +97,6 @@ export async function getCyclesToWeigh(): Promise<CropCycleForEmployeeWeighing[]
     return rowsWithDefaults;
   } catch (error) {
     console.error('Database Error:', error);
-    throw new Error('Failed to fetch cycles pending weighing.');
+    throw new Error('Failed to fetch cycles ready for loading.');
   }
 }
