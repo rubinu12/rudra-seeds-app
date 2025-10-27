@@ -4,39 +4,71 @@
 import React, { useState, useEffect, useMemo, useCallback, useTransition } from 'react';
 import Link from 'next/link';
 import { useDebounce } from '@/hooks/useDebounce';
+// Use the extended type definition
 import { CropCycleForEmployeeWeighing } from '@/lib/definitions';
+import { MasterDataItem, ShipmentCompanySetting } from '@/app/admin/settings/data'; // Import company types
 import { Search, LoaderCircle, SlidersHorizontal, Scale, CheckSquare, Phone, PackageCheck, Beaker, ChevronDown } from 'lucide-react';
 import * as harvestingActions from './actions';
-import SearchableSelect from '@/components/ui/SearchableSelect'; // Keep for SearchResultItem
 
-// Import new components
+// Import child components
 import HarvestingHeader from '@/components/employee/harvesting/HarvestingHeader';
 import HarvestingBottomNav from '@/components/employee/harvesting/HarvestingBottomNav';
 import SamplingListsSection from '@/components/employee/harvesting/SamplingListsSection';
 import WeighingInputSection from '@/components/employee/harvesting/WeighingInputSection';
 import { CollapsibleSection, TabButton } from '@/components/employee/harvesting/SharedComponents'; // Import shared
+import LoadingView from './LoadingView'; // Import the new LoadingView component
+import { InProgressShipment } from '@/app/employee/loading/data'; // Import shipment type
 
+// Key for localStorage persistence
+const LAST_ACTIVE_NAV_KEY = 'harvestingDashboard_lastActiveNav';
+
+// Props expected from the server component (app/employee/dashboard/page.tsx)
 type Props = {
     cyclesToSample: CropCycleForEmployeeWeighing[];
-    cyclesToWeigh: CropCycleForEmployeeWeighing[];
+    cyclesToStartWeighing: CropCycleForEmployeeWeighing[]; // Cycles with 'Priced' status
+    cyclesReadyForLoading: CropCycleForEmployeeWeighing[]; // Cycles with 'Weighed' status & bags > 0
+    initialShipments: InProgressShipment[]; // Shipments with 'Loading' status
+    transportCompanies: ShipmentCompanySetting[]; // Active transport companies
+    destinationCompanies: MasterDataItem[]; // Active destination companies
 };
 
+// Types used within this component
 type CollectionMethod = 'All' | 'Farm' | 'Parabadi yard' | 'Dhoraji yard' | 'Jalasar yard';
+type BottomNavTab = 'weighing_sampling' | 'loading';
 
 // --- Main Dashboard Component ---
-export default function HarvestingDashboard({ cyclesToSample, cyclesToWeigh }: Props) {
+export default function HarvestingDashboard({
+    cyclesToSample,
+    cyclesToStartWeighing, // Use updated prop
+    cyclesReadyForLoading,
+    initialShipments,
+    transportCompanies,
+    destinationCompanies
+}: Props) {
+    // --- State ---
     const [mainSearchTerm, setMainSearchTerm] = useState('');
     const [mainSearchResults, setMainSearchResults] = useState<CropCycleForEmployeeWeighing[]>([]);
     const [isMainSearchLoading, setIsMainSearchLoading] = useState(false);
     const debouncedMainSearchTerm = useDebounce(mainSearchTerm, 350);
 
-    const [activeListTab, setActiveListTab] = useState<'sampling' | 'weighing'>('sampling');
-    const [collectionMethodFilter, setCollectionMethodFilter] = useState<CollectionMethod>('All');
-    const [lastWeighingFilter, setLastWeighingFilter] = useState<CollectionMethod>('All');
-    const [secondarySearchTerm, setSecondarySearchTerm] = useState('');
-    const [activeBottomNav, setActiveBottomNav] = useState<'weighing_sampling' | 'loading'>('weighing_sampling');
-    const [currentlyWeighingCycleId, setCurrentlyWeighingCycleId] = useState<number | null>(null); // State for expanded weighing item
-    const [isWeighingListOpen, setIsWeighingListOpen] = useState(true); // State for weighing list collapsibility
+    const [activeWeighingSamplingTab, setActiveWeighingSamplingTab] = useState<'sampling' | 'weighing'>('sampling');
+    const [collectionMethodFilter, setCollectionMethodFilter] = useState<CollectionMethod>('All'); // Filter used by Header and passed to LoadingView
+    const [lastWeighingFilter, setLastWeighingFilter] = useState<CollectionMethod>('All'); // To persist weighing filter
+    const [secondarySearchTerm, setSecondarySearchTerm] = useState(''); // Search within Weighing/Sampling lists
+    // *** FIX: Initialize with default, update in useEffect ***
+    const [activeBottomNav, setActiveBottomNav] = useState<BottomNavTab>('weighing_sampling'); // Default value
+    const [currentlyWeighingCycleId, setCurrentlyWeighingCycleId] = useState<number | null>(null); // Controls WeighingInputSection visibility
+    const [isWeighingListOpen, setIsWeighingListOpen] = useState(true); // Collapsible state for weighing list
+
+    // --- Effects ---
+
+    // *** FIX: useEffect to load initial state from localStorage ***
+    useEffect(() => {
+        const savedTab = localStorage.getItem(LAST_ACTIVE_NAV_KEY);
+        if (savedTab === 'weighing_sampling' || savedTab === 'loading') {
+            setActiveBottomNav(savedTab);
+        }
+    }, []); // Empty dependency array ensures this runs only once on mount
 
     // Effect for main search
     useEffect(() => {
@@ -53,56 +85,70 @@ export default function HarvestingDashboard({ cyclesToSample, cyclesToWeigh }: P
         } else { setMainSearchResults([]); }
     }, [debouncedMainSearchTerm]);
 
-    // Effect for collection filter logic based on active tab
+    // Effect to adjust header filter based on active WEIGHING/SAMPLING tab or main view
     useEffect(() => {
-        // Use functional update for setActiveListTab's dependency array isn't needed
-        if (activeListTab === 'sampling') {
-            setCollectionMethodFilter('All');
-        } else {
-            setCollectionMethodFilter(lastWeighingFilter);
+        if (activeBottomNav === 'weighing_sampling') {
+             if (activeWeighingSamplingTab === 'sampling') {
+                 setCollectionMethodFilter('All'); // Sampling tab always defaults header to 'All'
+             } else {
+                 setCollectionMethodFilter(lastWeighingFilter); // Weighing tab uses persisted filter
+             }
         }
-        setCurrentlyWeighingCycleId(null); // Close weighing input when switching tabs
-    }, [activeListTab, lastWeighingFilter]);
+        // When switching *to* the Loading tab, the header filter state (collectionMethodFilter) persists from its last value.
+        setCurrentlyWeighingCycleId(null); // Close weighing input when switching tabs/views
+    }, [activeWeighingSamplingTab, lastWeighingFilter, activeBottomNav]); // Added activeBottomNav
 
+    // Effect to SAVE activeBottomNav to localStorage
+    useEffect(() => {
+        // No need for typeof window check here as useEffect only runs client-side
+        localStorage.setItem(LAST_ACTIVE_NAV_KEY, activeBottomNav);
+    }, [activeBottomNav]);
 
-    // Handler for collection filter change
+    // --- Handlers ---
+    // Handler for header collection filter change
     const handleCollectionFilterChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
         const newValue = event.target.value as CollectionMethod;
         setCollectionMethodFilter(newValue);
-        if (activeListTab === 'weighing') { setLastWeighingFilter(newValue); }
-        setCurrentlyWeighingCycleId(null); // Close weighing input when changing filter
+        // Persist the filter selection only if the Weighing tab (within Weighing/Sampling view) is active
+        if (activeBottomNav === 'weighing_sampling' && activeWeighingSamplingTab === 'weighing') {
+             setLastWeighingFilter(newValue);
+        }
+        setCurrentlyWeighingCycleId(null); // Close weighing input
     };
 
+    // --- Memos ---
     const isMainSearchActive = mainSearchTerm.length > 0;
 
-    // Filter lists based on secondary search and collection method (for weighing tab)
-     const filterFn = useCallback((cycle: CropCycleForEmployeeWeighing) => {
+    // Filter function for lists within Weighing/Sampling view
+     const filterFnWeighingSampling = useCallback((cycle: CropCycleForEmployeeWeighing) => {
         const term = secondarySearchTerm.toLowerCase();
-        // Filter by collection method only if weighing tab is active and filter is not 'All'
-        const collectionMatch = activeListTab === 'weighing' && collectionMethodFilter !== 'All'
+        // Only apply collection filter if Weighing tab is active and filter isn't 'All'
+        const collectionMatch = activeWeighingSamplingTab === 'weighing' && collectionMethodFilter !== 'All'
             ? cycle.goods_collection_method === collectionMethodFilter
             : true;
-        // Filter by secondary search term (name or mobile)
         const searchMatch = term === '' || cycle.farmer_name.toLowerCase().includes(term) || cycle.mobile_number?.includes(term);
         return collectionMatch && searchMatch;
-    }, [secondarySearchTerm, collectionMethodFilter, activeListTab]);
+    }, [secondarySearchTerm, collectionMethodFilter, activeWeighingSamplingTab]);
 
-    // Apply filtering to the lists
-    const harvestedCycles = useMemo(() => cyclesToSample.filter(c => c.status === 'Harvested').filter(filterFn), [cyclesToSample, filterFn]);
-    const sampleCollectedCycles = useMemo(() => cyclesToSample.filter(c => c.status === 'Sample Collected').filter(filterFn), [cyclesToSample, filterFn]);
-    const weighingCycles = useMemo(() => cyclesToWeigh.filter(filterFn), [cyclesToWeigh, filterFn]); // Filtered list for weighing tab
+    // Apply filtering to the lists used ONLY in Weighing/Sampling view
+    const harvestedCycles = useMemo(() => cyclesToSample.filter(c => c.status === 'Harvested').filter(filterFnWeighingSampling), [cyclesToSample, filterFnWeighingSampling]);
+    const sampleCollectedCycles = useMemo(() => cyclesToSample.filter(c => c.status === 'Sample Collected').filter(filterFnWeighingSampling), [cyclesToSample, filterFnWeighingSampling]);
+    // Use the correct prop for the weighing tab list
+    const weighingTabCycles = useMemo(() => cyclesToStartWeighing.filter(filterFnWeighingSampling), [cyclesToStartWeighing, filterFnWeighingSampling]);
 
+    // --- Render ---
     return (
         <div className="flex flex-col min-h-screen bg-background">
-            {/* Use HarvestingHeader */}
+            {/* Header: Pass correct filter state and disable logic */}
             <HarvestingHeader
                 collectionMethodFilter={collectionMethodFilter}
                 handleCollectionFilterChange={handleCollectionFilterChange}
-                isFilterDisabled={activeListTab === 'sampling' && !isMainSearchActive} // Pass disabled logic
+                // Filter is disabled if main search is active OR (if on Weighing/Sampling view AND Sampling tab is selected)
+                isFilterDisabled={isMainSearchActive || (activeBottomNav === 'weighing_sampling' && activeWeighingSamplingTab === 'sampling')}
             />
 
             {/* --- Main Content Area --- */}
-            <main className="flex-grow p-4 max-w-xl mx-auto w-full space-y-4 pb-20">
+            <main className="flex-grow p-4 max-w-xl mx-auto w-full space-y-4 pb-20"> {/* Ensure padding-bottom for nav */}
                 {/* Main Search Bar */}
                 <div className="relative">
                     <input
@@ -117,7 +163,7 @@ export default function HarvestingDashboard({ cyclesToSample, cyclesToWeigh }: P
                     </div>
                 </div>
 
-                {/* Conditional Rendering: Search Results vs Tabs */}
+                {/* Conditional Rendering: Search Results vs Main Views */}
                 {isMainSearchActive ? (
                     <SearchResultsSection
                         results={mainSearchResults}
@@ -125,55 +171,67 @@ export default function HarvestingDashboard({ cyclesToSample, cyclesToWeigh }: P
                         searchTerm={debouncedMainSearchTerm}
                     />
                 ) : (
-                    <div className="space-y-4">
-                        {/* Primary Tabs */}
-                        <div className="flex bg-surface-container p-1 rounded-full border border-outline/50">
-                            <TabButton label="સેમ્પલિંગ" isActive={activeListTab === 'sampling'} onClick={() => setActiveListTab('sampling')} />
-                            <TabButton label="વજન" isActive={activeListTab === 'weighing'} onClick={() => setActiveListTab('weighing')} />
+                    // Show content based on activeBottomNav
+                    activeBottomNav === 'weighing_sampling' ? (
+                        // --- Weighing/Sampling View ---
+                        <div className="space-y-4">
+                            {/* Primary Tabs (Sampling/Weighing) */}
+                            <div className="flex bg-surface-container p-1 rounded-full border border-outline/50">
+                                <TabButton label="સેમ્પલિંગ" isActive={activeWeighingSamplingTab === 'sampling'} onClick={() => setActiveWeighingSamplingTab('sampling')} />
+                                <TabButton label="વજન" isActive={activeWeighingSamplingTab === 'weighing'} onClick={() => setActiveWeighingSamplingTab('weighing')} />
+                            </div>
+
+                            {/* Secondary Search/Filter Bar (Only for Weighing/Sampling view) */}
+                            <SecondaryFilterBar searchTerm={secondarySearchTerm} setSearchTerm={setSecondarySearchTerm} />
+
+                            {/* Render content based on activeWeighingSamplingTab */}
+                            {activeWeighingSamplingTab === 'sampling' && (
+                                <SamplingListsSection
+                                    harvestedList={harvestedCycles}
+                                    sampleCollectedList={sampleCollectedCycles}
+                                />
+                            )}
+                            {activeWeighingSamplingTab === 'weighing' && (
+                                <CollapsibleSection
+                                    title={`વજન કરવાનું બાકી છે (${weighingTabCycles.length})`}
+                                    isOpen={isWeighingListOpen}
+                                    setIsOpen={setIsWeighingListOpen}
+                                >
+                                    <div className="space-y-3 pt-2">
+                                        {weighingTabCycles.length > 0 ? (
+                                            weighingTabCycles.map(cycle => (
+                                                <CycleListItem // Renders items for the Weighing tab
+                                                    key={cycle.crop_cycle_id}
+                                                    cycle={cycle}
+                                                    listType="weighing"
+                                                    isWeighingOpen={currentlyWeighingCycleId === cycle.crop_cycle_id}
+                                                    setCurrentlyWeighingCycleId={setCurrentlyWeighingCycleId}
+                                                />
+                                            ))
+                                        ) : (
+                                            <p className="text-center text-on-surface-variant py-8">આ તબક્કા માટે કોઈ સાયકલ મળેલ નથી.</p>
+                                        )}
+                                    </div>
+                                </CollapsibleSection>
+                            )}
                         </div>
-
-                        {/* Secondary Search/Filter Bar */}
-                        <SecondaryFilterBar searchTerm={secondarySearchTerm} setSearchTerm={setSecondarySearchTerm} />
-
-                        {/* Render based on active tab */}
-                        {activeListTab === 'sampling' && (
-                            <SamplingListsSection // Use SamplingListsSection component
-                                harvestedList={harvestedCycles}
-                                sampleCollectedList={sampleCollectedCycles}
-                            />
-                        )}
-
-                        {activeListTab === 'weighing' && (
-                            <CollapsibleSection // Use CollapsibleSection directly for weighing list
-                                title={`વજન કરવાનું બાકી છે (${weighingCycles.length})`}
-                                isOpen={isWeighingListOpen}
-                                setIsOpen={setIsWeighingListOpen}
-                            >
-                                <div className="space-y-3 pt-2">
-                                    {weighingCycles.length > 0 ? (
-                                        weighingCycles.map(cycle => (
-                                            <CycleListItem // Render CycleListItem for weighing
-                                                key={cycle.crop_cycle_id}
-                                                cycle={cycle}
-                                                listType="weighing"
-                                                isWeighingOpen={currentlyWeighingCycleId === cycle.crop_cycle_id} // Pass open state
-                                                setCurrentlyWeighingCycleId={setCurrentlyWeighingCycleId} // Pass setter
-                                            />
-                                        ))
-                                    ) : (
-                                        <p className="text-center text-on-surface-variant py-8">આ તબક્કા માટે કોઈ સાયકલ મળેલ નથી.</p>
-                                    )}
-                                </div>
-                            </CollapsibleSection>
-                        )}
-                    </div>
+                    ) : (
+                        // --- Loading View ---
+                        <LoadingView
+                            initialShipments={initialShipments}
+                            cyclesReadyForLoading={cyclesReadyForLoading}
+                            transportCompanies={transportCompanies}
+                            destinationCompanies={destinationCompanies}
+                            locationFilter={collectionMethodFilter} // Pass header filter down
+                        />
+                    )
                 )}
             </main>
 
-            {/* Use HarvestingBottomNav */}
+            {/* Bottom Nav: Controls activeBottomNav state */}
             <HarvestingBottomNav
                 activeBottomNav={activeBottomNav}
-                setActiveBottomNav={setActiveBottomNav}
+                setActiveBottomNav={setActiveBottomNav} // Pass setter down
             />
         </div>
     );
@@ -181,7 +239,7 @@ export default function HarvestingDashboard({ cyclesToSample, cyclesToWeigh }: P
 
 // --- Sub-Components ---
 
-// Secondary Filter Bar (Moved from SamplingListsSection for use by both tabs)
+// Secondary Filter Bar (Only shown in Weighing/Sampling view)
 function SecondaryFilterBar({ searchTerm, setSearchTerm }: { searchTerm: string, setSearchTerm: (term: string) => void }) {
     return (
         <div className="relative flex items-center gap-2 bg-surface-container p-2 rounded-xl border border-outline/50">
@@ -193,70 +251,52 @@ function SecondaryFilterBar({ searchTerm, setSearchTerm }: { searchTerm: string,
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="flex-grow bg-transparent focus:outline-none text-sm h-8"
             />
-            <button className="p-2 rounded-full hover:bg-primary/10">
+            {/* Filter button can be added back if needed */}
+            {/* <button className="p-2 rounded-full hover:bg-primary/10">
                 <SlidersHorizontal className="w-5 h-5 text-primary" />
-            </button>
+            </button> */}
         </div>
     );
 }
 
-// *** UPDATED CycleListItem to handle weighing expansion ***
+// CycleListItem (Only for Weighing Tab list)
 function CycleListItem({
     cycle,
     listType,
-    isWeighingOpen, // Prop to know if weighing section is open for this item
-    setCurrentlyWeighingCycleId // Prop to set which item is open
+    isWeighingOpen,
+    setCurrentlyWeighingCycleId
 }: {
     cycle: CropCycleForEmployeeWeighing,
-    listType: 'sampling' | 'weighing',
-    isWeighingOpen?: boolean, // Optional: only needed for weighing list
-    setCurrentlyWeighingCycleId?: (id: number | null) => void // Optional: only needed for weighing list
+    listType: 'weighing',
+    isWeighingOpen?: boolean,
+    setCurrentlyWeighingCycleId?: (id: number | null) => void
 }) {
-    // Note: ActionToggle component is now inside SamplingListsSection
 
     let actionElement = null;
     const buttonStyle = "h-[40px] px-5 text-sm font-medium rounded-full flex items-center justify-center gap-2 transition-all";
 
-    // Action/Display logic based on listType and status
-    if (listType === 'sampling') {
-        // Sampling actions are now handled within SamplingListsSection's CycleListItem
-        // This component instance will only be rendered via SamplingListsSection
-        // We only need basic display here if we were to reuse it, but let's assume
-        // SamplingListsSection uses its own internal CycleListItem for now.
-        // For simplicity, we can duplicate the necessary display logic if needed,
-        // but ideally, CycleListItem would be more generic or moved entirely inside SamplingListsSection.
-        // --> Let's assume SamplingListsSection handles its items fully.
-        // --> This CycleListItem instance will now ONLY handle the WEIGHING list display.
-
-    } else if (listType === 'weighing') {
-        if (cycle.status === 'Priced') {
-            actionElement = (
-                <button
-                    onClick={() => setCurrentlyWeighingCycleId?.(cycle.crop_cycle_id)} // Open weighing input
-                    className={`${buttonStyle} bg-primary text-on-primary hover:shadow-md w-full sm:w-auto`} // Make button full width on small screens
-                >
-                    <Scale className="w-4 h-4" /> વજન શરૂ કરો
-                </button>
-            );
-        } else if (cycle.status === 'Weighed') {
-             actionElement = ( // Display recorded bags
-                 <div className="text-sm text-center font-medium text-green-700 bg-green-100 px-4 py-2 rounded-full w-full">
-                     વજન પૂર્ણ: {cycle.quantity_in_bags ?? 'N/A'} બેગ
-                 </div>
-             );
-         }
+    // Show button only for 'Priced' status cycles
+    if (cycle.status === 'Priced') {
+        actionElement = (
+            <button
+                onClick={() => setCurrentlyWeighingCycleId?.(cycle.crop_cycle_id)}
+                className={`${buttonStyle} bg-primary text-on-primary hover:shadow-md w-full sm:w-auto`}
+            >
+                <Scale className="w-4 h-4" /> વજન શરૂ કરો
+            </button>
+        );
     }
+    // Weighed cycles are handled in Loading view, no action needed here.
 
     const statusDisplayMap: Record<string, string> = {
-        'Harvested': 'લણણી કરેલ', 'Sample Collected': 'સેમ્પલ કલેક્ટેડ', 'Sampled': 'સેમ્પલ લેવાયું',
-        'Price Proposed': 'ભાવ પ્રસ્તાવિત', 'Priced': 'ભાવ નક્કી', 'Weighed': 'વજન પૂર્ણ',
-        'Growing': 'વાવેતર ચાલે છે'
-     };
+        'Priced': 'ભાવ નક્કી',
+        // Add others if unexpected statuses appear, but focus should be 'Priced'
+    };
     const displayStatus = statusDisplayMap[cycle.status] || cycle.status;
 
     return (
         <div className="bg-surface rounded-2xl p-4 border border-outline/30 shadow-sm">
-            {/* Top section: Info + Call button */}
+            {/* Info + Call button */}
             <div className="flex justify-between items-start mb-3">
                  <div>
                     <p className="font-semibold text-lg text-on-surface">{cycle.farmer_name}</p>
@@ -279,45 +319,44 @@ function CycleListItem({
                  )}
             </div>
 
-            {/* Action Button Area (Weighing Tab Only) */}
-            {listType === 'weighing' && actionElement && !isWeighingOpen && ( // Show button only if weighing input is NOT open
+            {/* Action Button Area */}
+            {actionElement && !isWeighingOpen && (
                 <div className="mt-3 pt-3 border-t border-outline/20 flex justify-end">
                     {actionElement}
                 </div>
             )}
 
-             {/* Weighing Input Section (Weighing Tab Only, when open) */}
-             {listType === 'weighing' && isWeighingOpen && (
+             {/* Weighing Input Section */}
+             {isWeighingOpen && (
                  <WeighingInputSection
                     cycle={cycle}
-                    onCancel={() => setCurrentlyWeighingCycleId?.(null)} // Close the section
+                    onCancel={() => setCurrentlyWeighingCycleId?.(null)}
                  />
             )}
         </div>
     );
 }
 
-
-// Search Results Section (Refactored to use SearchResultItem)
+// Search Results Section
 function SearchResultsSection({ results, isLoading, searchTerm }: { results: CropCycleForEmployeeWeighing[], isLoading: boolean, searchTerm: string }) {
-    return (
+     return (
         <div className="space-y-3">
-             <h2 className="text-sm font-medium text-on-surface-variant px-2">શોધ પરિણામો ({results.length})</h2>
+            <h2 className="text-sm font-medium text-on-surface-variant px-2">શોધ પરિણામો ({results.length})</h2>
             {isLoading && <div className="flex justify-center items-center py-10"><LoaderCircle className="w-8 h-8 text-primary animate-spin" /></div>}
             {!isLoading && results.length === 0 && searchTerm && <p className="text-center text-on-surface-variant py-8">"{searchTerm}" થી મેળ ખાતા કોઈ ખેડૂત મળ્યા નથી.</p>}
             {!isLoading && results.length > 0 && results.map(cycle => ( <SearchResultItem key={cycle.crop_cycle_id} cycle={cycle} /> ))}
         </div>
-    );
+     );
 }
 
-// Search Result Item (Handles 'Growing' -> 'Harvested' action)
+// Search Result Item
 function SearchResultItem({ cycle }: { cycle: CropCycleForEmployeeWeighing }) {
+   // Minimal changes needed here, logic remains mostly the same
     const [isPending, startTransition] = useTransition();
     const [selectedCollectionMethod, setSelectedCollectionMethod] = useState(cycle.goods_collection_method || 'Farm');
-
     useEffect(() => { setSelectedCollectionMethod(cycle.goods_collection_method || 'Farm'); }, [cycle.goods_collection_method]);
 
-    const handleConfirmHarvest = () => { /* ... same confirm harvest logic ... */
+    const handleConfirmHarvest = () => {
         if (cycle.status !== 'Growing' || !selectedCollectionMethod) return;
         const formData = new FormData();
         formData.append('cropCycleId', String(cycle.crop_cycle_id));
@@ -329,6 +368,19 @@ function SearchResultItem({ cycle }: { cycle: CropCycleForEmployeeWeighing }) {
         });
      };
 
+     // Helper function for markSampleCollected, needed within SearchResultItem scope
+     const handleMarkSampleCollected = () => {
+        if (cycle.status !== 'Harvested') return;
+        const formData = new FormData();
+        formData.append('cropCycleId', String(cycle.crop_cycle_id));
+        startTransition(async () => {
+            const result = await harvestingActions.markSampleCollected(null, formData);
+            if (result.success) { window.location.reload(); }
+            else { alert(`Error: ${result.message || 'Failed to mark sample collected.'}`); }
+        });
+    };
+
+
     const collectionOptions = [ { value: 'Farm', label: 'ખેતર' }, { value: 'Parabadi yard', label: 'પરબડી યાર્ડ' }, { value: 'Dhoraji yard', label: 'ધોરાજી યાર્ડ' }, { value: 'Jalasar yard', label: 'જાળાસર યાર્ડ' } ];
     let nextActionElement = null;
     const buttonStyle = "w-full h-[40px] px-5 text-sm font-medium rounded-full flex items-center justify-center gap-2 transition-all hover:shadow-md";
@@ -336,23 +388,77 @@ function SearchResultItem({ cycle }: { cycle: CropCycleForEmployeeWeighing }) {
     const displayStatus = statusDisplayMap[cycle.status] || cycle.status;
     const displayReadyToHarvest = 'લણણી માટે તૈયાર';
 
+    // Define actions based on cycle status
     switch (cycle.status) {
         case 'Growing':
-            nextActionElement = ( /* ... same button/select as before ... */
+            nextActionElement = (
                 <div className="flex flex-col sm:flex-row items-center gap-3">
-                    <div className="w-full sm:flex-1"> <div className="relative rounded-lg border border-outline bg-surface-container h-[40px]"> <select id={`collection-select-${cycle.crop_cycle_id}`} value={selectedCollectionMethod} onChange={(e) => setSelectedCollectionMethod(e.target.value)} className="w-full h-full pl-3 pr-8 rounded-lg bg-transparent appearance-none text-sm text-on-surface focus:outline-none focus:ring-1 focus:ring-primary"> {collectionOptions.map(opt => ( <option key={opt.value} value={opt.value}>{opt.label}</option> ))} </select> <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant pointer-events-none" /> </div> </div>
-                     <button onClick={handleConfirmHarvest} disabled={isPending || !selectedCollectionMethod} className={`${buttonStyle} sm:w-auto bg-primary text-on-primary disabled:opacity-50`}> {isPending ? <LoaderCircle className="w-4 h-4 animate-spin"/> : <CheckSquare className="w-4 h-4" />} લણણીની પુષ્ટિ કરો </button>
-                </div> ); break;
-        case 'Harvested': nextActionElement = <Link href={`/employee/harvesting/sample/${cycle.crop_cycle_id}`} className={`${buttonStyle} bg-secondary-container text-on-secondary-container`}><PackageCheck className="w-4 h-4" /> સેમ્પલ લો</Link>; break;
-        case 'Sample Collected': nextActionElement = <Link href={`/employee/harvesting/sample/${cycle.crop_cycle_id}`} className={`${buttonStyle} bg-secondary-container text-on-secondary-container`}><Beaker className="w-4 h-4" /> સેમ્પલ ડેટા દાખલ કરો</Link>; break;
-        case 'Sampled': nextActionElement = <div className="text-xs text-amber-700 bg-amber-100 px-3 py-2 rounded-full w-full text-center block font-medium">એડમિનના ભાવ બાકી</div>; break;
-        case 'Priced': nextActionElement = <button className={`${buttonStyle} bg-primary text-on-primary`} disabled><Scale className="w-4 h-4" /> વજન શરૂ કરો</button>; break; // Disabled in search results
-        case 'Weighed': nextActionElement = <div className="text-xs text-green-700 bg-green-100 px-3 py-2 rounded-full w-full text-center block font-medium">વજન પૂર્ણ</div>; break;
-        default: nextActionElement = <div className="text-xs text-gray-500 bg-gray-100 px-3 py-2 rounded-full w-full text-center block font-medium">સ્થિતિ: {displayStatus}</div>;
+                    <div className="w-full sm:flex-1">
+                        <div className="relative rounded-lg border border-outline bg-surface-container h-[40px]">
+                            <select id={`collection-select-${cycle.crop_cycle_id}`} value={selectedCollectionMethod} onChange={(e) => setSelectedCollectionMethod(e.target.value)} className="w-full h-full pl-3 pr-8 rounded-lg bg-transparent appearance-none text-sm text-on-surface focus:outline-none focus:ring-1 focus:ring-primary">
+                                {collectionOptions.map(opt => ( <option key={opt.value} value={opt.value}>{opt.label}</option> ))}
+                            </select>
+                            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant pointer-events-none" />
+                        </div>
+                    </div>
+                    <button onClick={handleConfirmHarvest} disabled={isPending || !selectedCollectionMethod} className={`${buttonStyle} sm:w-auto bg-primary text-on-primary disabled:opacity-50`}>
+                        {isPending ? <LoaderCircle className="w-4 h-4 animate-spin"/> : <CheckSquare className="w-4 h-4" />} લણણીની પુષ્ટિ કરો
+                    </button>
+                </div>
+            );
+            break;
+        case 'Harvested': // Action is now an ActionToggle
+            nextActionElement = (
+                <ActionToggle
+                    label="સેમ્પલ કલેક્ટેડ"
+                    onToggle={handleMarkSampleCollected}
+                    isPending={isPending}
+                    checked={false}
+                />
+            );
+            break;
+        case 'Sample Collected':
+            nextActionElement = <Link href={`/employee/harvesting/sample/${cycle.crop_cycle_id}`} className={`${buttonStyle} bg-secondary-container text-on-secondary-container`}><Beaker className="w-4 h-4" /> સેમ્પલ ડેટા દાખલ કરો</Link>;
+            break;
+        case 'Sampled':
+            nextActionElement = <div className="text-xs text-amber-700 bg-amber-100 px-3 py-2 rounded-full w-full text-center block font-medium">એડમિનના ભાવ બાકી</div>;
+            break;
+        case 'Priced':
+            nextActionElement = <div className="text-xs text-blue-700 bg-blue-100 px-3 py-2 rounded-full w-full text-center block font-medium">વજન માટે તૈયાર</div>;
+            break;
+        case 'Weighed':
+            nextActionElement = <div className="text-xs text-green-700 bg-green-100 px-3 py-2 rounded-full w-full text-center block font-medium">લોડિંગ માટે તૈયાર ({cycle.bags_remaining_to_load ?? 0} બાકી)</div>;
+            break;
+        default:
+            nextActionElement = <div className="text-xs text-gray-500 bg-gray-100 px-3 py-2 rounded-full w-full text-center block font-medium">સ્થિતિ: {displayStatus}</div>;
     }
-    return ( /* ... same display structure as before, no phone ... */
+
+    return (
          <div className="bg-surface rounded-2xl p-4 border border-outline/30 shadow-sm">
-            <div> <p className="font-semibold text-lg text-on-surface">{cycle.farmer_name}</p> <p className="text-sm text-on-surface-variant">{cycle.seed_variety} • {cycle.farm_location}</p> <p className="text-xs mt-1 font-medium text-primary">{cycle.status === 'Growing' ? displayReadyToHarvest : displayStatus}</p> </div>
+            <div>
+                <p className="font-semibold text-lg text-on-surface">{cycle.farmer_name}</p>
+                <p className="text-sm text-on-surface-variant">{cycle.seed_variety} • {cycle.farm_location}</p>
+                <p className="text-xs mt-1 font-medium text-primary">{cycle.status === 'Growing' ? displayReadyToHarvest : displayStatus}</p>
+            </div>
             {nextActionElement && ( <div className="mt-3 pt-3 border-t border-outline/20"> {nextActionElement} </div> )}
-        </div> );
+        </div>
+     );
 }
+
+// Reusable Action Toggle Component (Needed by SearchResultItem)
+const ActionToggle = ({ label, onToggle, isPending, checked = false }: {
+    label: string,
+    onToggle: () => void,
+    isPending: boolean,
+    checked?: boolean
+}) => (
+    <label className="relative inline-flex items-center cursor-pointer">
+        <input type="checkbox" className="sr-only peer" onChange={onToggle} disabled={isPending} checked={checked} />
+        <div className="relative w-11 h-6 bg-outline rounded-full peer peer-checked:bg-primary transition-colors duration-200 ease-in-out">
+            <div className={`absolute top-0.5 left-[2px] bg-white border-gray-300 border rounded-full h-5 w-5 transition-transform duration-200 ease-in-out peer-checked:translate-x-full flex items-center justify-center`}>
+                 {isPending && <LoaderCircle className="w-4 h-4 text-primary animate-spin" />}
+            </div>
+        </div>
+        <span className="ml-3 text-sm font-medium text-on-surface-variant"> {isPending ? 'અપડેટ થઈ રહ્યું છે...' : `માર્ક કરો ${label}`} </span>
+    </label>
+);

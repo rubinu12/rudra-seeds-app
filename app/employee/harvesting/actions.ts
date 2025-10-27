@@ -408,11 +408,12 @@ export async function recordWeighing(prevState: FormState | null, formData: Form
     console.log(`Recording weight for cycle ${cropCycleId}: Bags=${bagsWeighed}, Purchased=${purchased}, Returned=${returned}, Threshold=${threshold}, Flagged=${isProductionFlagged}`);
 
     try {
-        // Update bag count, status, date, and flag
+        // *** FIX: Also set bags_remaining_to_load = bagsWeighed ***
         const result = await sql`
             UPDATE crop_cycles
             SET
                 quantity_in_bags = ${bagsWeighed},
+                bags_remaining_to_load = ${bagsWeighed}, -- Initialize remaining bags
                 status = 'Weighed',
                 weighing_date = ${weighingDate},
                 is_production_flagged = ${isProductionFlagged}
