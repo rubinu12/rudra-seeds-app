@@ -1,12 +1,10 @@
 // src/app/admin/dashboard/page.tsx
 "use client";
 
-import { useState, useEffect, useCallback } from 'react'; // Added useCallback
+import { useState, useEffect, useCallback } from 'react';
 import KeyMetrics from "@/components/admin/KeyMetrics";
 import Sidebar from "@/components/admin/Sidebar";
 import WelcomeHeader from "@/components/admin/WelcomeHeader";
-import AddLandmarkModal from '@/components/admin/modals/AddLandmarkModal';
-import AddVarietyModal from '@/components/admin/modals/AddVarietyModal';
 import { LoaderCircle } from 'lucide-react';
 import Navbar, { Season } from '@/components/admin/Navbar';
 
@@ -14,9 +12,13 @@ import Navbar, { Season } from '@/components/admin/Navbar';
 import {
     getCyclePipelineStatus, getCriticalAlerts, getFinancialOverview,
     getShipmentSummary, getCyclesPendingSampleEntry, getCyclesPendingTempPrice,
-    getCyclesPendingVerification, // Function needed for refresh
+    getCyclesPendingVerification,
     CyclePipelineStatus, CriticalAlertsData, FinancialOverviewData, ShipmentSummaryData
 } from '@/lib/admin-data';
+import { getDispatchedShipmentsForBilling, DispatchedShipmentInfo } from '@/lib/shipment-data';
+// *** ADD Import for payment cycle list fetching ***
+import { getCyclesReadyForPayment, CycleForPaymentSelection } from '@/lib/payment-data';
+
 
 // Import CycleFor... types
 import type {
@@ -33,8 +35,13 @@ import ShipmentSummaryCard from '@/components/admin/harvesting/ShipmentSummaryCa
 import SampleEntryModal from '@/components/admin/harvesting/SampleEntryModal';
 import SetTemporaryPriceModal from '@/components/admin/harvesting/SetTemporaryPriceModal';
 import VerifyPriceModal from '@/components/admin/harvesting/VerifyPriceModal';
+import EditCycleModal from '@/components/admin/modals/EditCycleModal';
+import SelectShipmentBillModal from '@/components/admin/harvesting/SelectShipmentBillModal';
+// *** ADD Import for SelectPaymentCycleModal ***
+import SelectPaymentCycleModal from '@/components/admin/harvesting/SelectPaymentCycleModal';
 
-// *** Combined state type for harvesting data ***
+
+// Combined state type for harvesting data
 type HarvestingDashboardData = {
     pipelineStatus: CyclePipelineStatus;
     criticalAlerts: CriticalAlertsData;
@@ -46,19 +53,25 @@ type HarvestingDashboardData = {
 };
 
 export default function AdminDashboardPage() {
-    const [isLandmarkModalOpen, setLandmarkModalOpen] = useState(false);
-    const [isVarietyModalOpen, setVarietyModalOpen] = useState(false);
-    const [activeSeason, setActiveSeason] = useState<Season>('Harvesting');
-    const [harvestingData, setHarvestingData] = useState<HarvestingDashboardData | null>(null);
-    const [isLoadingHarvestingData, setIsLoadingHarvestingData] = useState(false);
-    const [errorLoadingHarvestingData, setErrorLoadingHarvestingData] = useState<string | null>(null);
-
-    // *** State specifically for modal refresh loading indicator ***
-    const [isModalRefreshing, setIsModalRefreshing] = useState(false);
-
+    // --- State for Modals ---
     const [isSampleEntryModalOpen, setSampleEntryModalOpen] = useState(false);
     const [isSetTemporaryPriceModalOpen, setSetTemporaryPriceModalOpen] = useState(false);
     const [isVerifyPriceModalOpen, setVerifyPriceModalOpen] = useState(false);
+    const [isEditCycleModalOpen, setIsEditCycleModalOpen] = useState(false);
+    const [isSelectShipmentModalOpen, setIsSelectShipmentModalOpen] = useState(false);
+    const [isSelectPaymentModalOpen, setIsSelectPaymentModalOpen] = useState(false); // *** ADD State for Payment Select Modal ***
+
+    // --- State for Season & Data ---
+    const [activeSeason, setActiveSeason] = useState<Season>('Sowing');
+    const [harvestingData, setHarvestingData] = useState<HarvestingDashboardData | null>(null);
+    const [isLoadingHarvestingData, setIsLoadingHarvestingData] = useState(false);
+    const [errorLoadingHarvestingData, setErrorLoadingHarvestingData] = useState<string | null>(null);
+    const [isModalRefreshing, setIsModalRefreshing] = useState(false);
+    const [dispatchedShipments, setDispatchedShipments] = useState<DispatchedShipmentInfo[]>([]);
+    const [isLoadingDispatchedShipments, setIsLoadingDispatchedShipments] = useState(false);
+    // *** ADD State for payment cycles list and loading ***
+    const [paymentCycles, setPaymentCycles] = useState<CycleForPaymentSelection[]>([]);
+    const [isLoadingPaymentCycles, setIsLoadingPaymentCycles] = useState(false);
 
 
     const handleSeasonChange = (season: Season) => {
@@ -69,10 +82,11 @@ export default function AdminDashboardPage() {
         }
     };
 
-    // *** Encapsulated data fetching logic ***
+    // Data fetching logic (unchanged)
     const fetchHarvestingData = useCallback(async (isRefresh = false) => {
-        if (!isRefresh) setIsLoadingHarvestingData(true); // Show main loader only on initial load
-        if (isRefresh) setIsModalRefreshing(true); // Show modal loader on refresh
+        // ... (fetch logic remains the same) ...
+        if (!isRefresh) setIsLoadingHarvestingData(true);
+        if (isRefresh) setIsModalRefreshing(true);
         setErrorLoadingHarvestingData(null);
         console.log(isRefresh ? "Refreshing harvesting data..." : "Fetching harvesting data...");
         try {
@@ -98,33 +112,67 @@ export default function AdminDashboardPage() {
             if (!isRefresh) setIsLoadingHarvestingData(false);
             if (isRefresh) setIsModalRefreshing(false);
         }
-    }, []); // Empty dependency array as it uses no external state other than fetch functions
+    }, []);
 
-    // Fetch harvesting data effect
+    // Effect to fetch data (unchanged)
     useEffect(() => {
         if (activeSeason === 'Harvesting' && !harvestingData && !isLoadingHarvestingData) {
-            fetchHarvestingData(false); // Initial fetch
+            fetchHarvestingData(false);
         }
-        // Clear data if switching away from Harvesting (optional, keeps data cached if removed)
-        // else if (activeSeason !== 'Harvesting') {
-        //     setHarvestingData(null);
-        // }
     }, [activeSeason, harvestingData, isLoadingHarvestingData, fetchHarvestingData]);
 
-    // *** Refresh handler function to pass to modals ***
+    // Refresh handler (unchanged)
     const handleModalRefresh = useCallback(async () => {
-        // Specifically re-fetch the data relevant to the modals
-        // Or re-fetch all harvesting data for simplicity
         await fetchHarvestingData(true);
     }, [fetchHarvestingData]);
 
+    // Handler to open Edit Cycle Modal (unchanged)
+    const handleOpenEditModal = () => {
+        setIsEditCycleModalOpen(true);
+    };
 
-    // Renders content based on the active season
+    // Handler for Generate Shipment Bill (unchanged)
+    const handleGenerateShipmentBill = async () => {
+        console.log("Fetching dispatched shipments...");
+        setIsLoadingDispatchedShipments(true);
+        setIsSelectShipmentModalOpen(true); // Open modal immediately
+        try {
+            const shipments = await getDispatchedShipmentsForBilling();
+            setDispatchedShipments(shipments);
+        } catch (error) {
+            console.error("Error fetching dispatched shipments:", error);
+            alert(`Error fetching shipments: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            setIsSelectShipmentModalOpen(false);
+        } finally {
+            setIsLoadingDispatchedShipments(false);
+        }
+    };
+
+    // *** UPDATED Handler for Process Farmer Payments ***
+    const handleProcessFarmerPayments = async () => {
+        console.log("Fetching cycles ready for payment...");
+        setIsLoadingPaymentCycles(true);
+        setIsSelectPaymentModalOpen(true); // Open modal immediately
+        try {
+            // Call the server function
+            const cycles = await getCyclesReadyForPayment();
+            setPaymentCycles(cycles);
+        } catch (error) {
+            console.error("Error fetching cycles for payment:", error);
+            alert(`Error fetching cycles: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            setIsSelectPaymentModalOpen(false); // Close modal on error
+        } finally {
+            setIsLoadingPaymentCycles(false);
+        }
+    };
+
+
+    // Render season content logic (unchanged)
     const renderSeasonContent = () => {
-        // ... (switch cases remain the same, just render the content)
+        // ... (switch case remains the same) ...
         switch (activeSeason) {
             case 'Harvesting':
-                if (isLoadingHarvestingData && !isModalRefreshing) { // Don't show main loader during modal refresh
+                if (isLoadingHarvestingData && !isModalRefreshing) {
                     return <div className="flex justify-center items-center h-64"><LoaderCircle className="w-12 h-12 text-primary animate-spin" /></div>;
                 }
                 if (errorLoadingHarvestingData) {
@@ -140,7 +188,7 @@ export default function AdminDashboardPage() {
                         </div>
                     );
                 }
-                return null; // Or a loading/empty state specifically for when harvestingData is null
+                return null;
             case 'Growing':
                  return (
                     <div className="bg-surface/70 backdrop-blur-md border border-outline/30 rounded-lg p-10 text-center text-on-surface-variant">
@@ -161,11 +209,12 @@ export default function AdminDashboardPage() {
                     {/* Left Column */}
                     <div className="lg:col-span-2 space-y-8">
                         <WelcomeHeader
-                            onAddLandmarkClick={() => setLandmarkModalOpen(true)}
-                            onAddVarietyClick={() => setVarietyModalOpen(true)}
                             onEnterSampleDataClick={() => activeSeason === 'Harvesting' && setSampleEntryModalOpen(true)}
                             onSetTemporaryPriceClick={() => activeSeason === 'Harvesting' && setSetTemporaryPriceModalOpen(true)}
                             onVerifyPriceClick={() => activeSeason === 'Harvesting' && setVerifyPriceModalOpen(true)}
+                            onEditCycleClick={handleOpenEditModal}
+                            onGenerateShipmentBillClick={handleGenerateShipmentBill}
+                            onProcessFarmerPaymentsClick={handleProcessFarmerPayments} // Handler is now updated
                             activeSeason={activeSeason}
                         />
                         {renderSeasonContent()}
@@ -178,30 +227,39 @@ export default function AdminDashboardPage() {
             </main>
 
             {/* Modals */}
-            <AddLandmarkModal isOpen={isLandmarkModalOpen} onClose={() => setLandmarkModalOpen(false)} />
-            <AddVarietyModal isOpen={isVarietyModalOpen} onClose={() => setVarietyModalOpen(false)} />
-
-            {/* Pass refresh handler and state to relevant modals */}
             <SampleEntryModal
                 isOpen={isSampleEntryModalOpen}
                 onClose={() => setSampleEntryModalOpen(false)}
                 cycles={harvestingData?.cyclesPendingSampleEntry || []}
-                // onRefresh={handleModalRefresh} // Add if refresh needed here
-                // isRefreshing={isModalRefreshing}
             />
              <SetTemporaryPriceModal
                 isOpen={isSetTemporaryPriceModalOpen}
                 onClose={() => setSetTemporaryPriceModalOpen(false)}
                 cycles={harvestingData?.cyclesPendingTempPrice || []}
-                // onRefresh={handleModalRefresh} // Add if refresh needed here
-                // isRefreshing={isModalRefreshing}
             />
              <VerifyPriceModal
                 isOpen={isVerifyPriceModalOpen}
                 onClose={() => setVerifyPriceModalOpen(false)}
                 cycles={harvestingData?.cyclesPendingVerification || []}
-                onRefresh={handleModalRefresh} // Pass refresh function
-                isRefreshing={isModalRefreshing} // Pass refresh loading state
+                onRefresh={handleModalRefresh}
+                isRefreshing={isModalRefreshing}
+            />
+            <EditCycleModal
+                isOpen={isEditCycleModalOpen}
+                onClose={() => setIsEditCycleModalOpen(false)}
+            />
+             <SelectShipmentBillModal
+                isOpen={isSelectShipmentModalOpen}
+                onClose={() => setIsSelectShipmentModalOpen(false)}
+                shipments={dispatchedShipments}
+                isLoading={isLoadingDispatchedShipments}
+            />
+             {/* *** RENDER Select Payment Cycle Modal *** */}
+             <SelectPaymentCycleModal
+                isOpen={isSelectPaymentModalOpen}
+                onClose={() => setIsSelectPaymentModalOpen(false)}
+                cycles={paymentCycles}
+                isLoading={isLoadingPaymentCycles}
             />
         </>
     );

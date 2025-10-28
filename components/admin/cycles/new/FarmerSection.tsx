@@ -1,7 +1,8 @@
 // @/components/admin/cycles/new/FarmerSection.tsx
 "use client";
 import { useState } from 'react';
-import { User, Tractor, PlusCircle, LoaderCircle, X, Search, Check } from 'lucide-react';
+// *** ADD Trash2 icon ***
+import { User, Tractor, PlusCircle, LoaderCircle, X, Search, Check, Trash2 } from 'lucide-react';
 import type { FarmerDetails, Farm, BankAccount } from '@/lib/definitions';
 import { Input, Textarea } from '@/components/ui/FormInputs';
 import SearchableSelect from '@/components/ui/SearchableSelect';
@@ -42,7 +43,7 @@ export const FarmerSection = ({
 }: Props) => {
     const [farmerData, setFarmerData] = farmerState;
     const [farmData, setFarmData] = farmState;
-    
+
     const handleFarmerChange = (e: React.ChangeEvent<any>) => {
         setFarmerData((prev: any) => ({ ...prev, [e.target.name]: e.target.value }));
     };
@@ -57,6 +58,11 @@ export const FarmerSection = ({
         setNewBankAccounts(newAccounts);
     };
 
+    // *** ADDED: Function to remove a bank account form ***
+    const removeBankAccount = (indexToRemove: number) => {
+        setNewBankAccounts((prev: any[]) => prev.filter((_, index) => index !== indexToRemove));
+    };
+
     const handleAccountSelection = (accountId: string) => {
         setSelectedAccountIds(
             selectedAccountIds.includes(accountId)
@@ -64,7 +70,7 @@ export const FarmerSection = ({
                 : [...selectedAccountIds, accountId]
         );
     };
-    
+
     const isExistingFarmer = isSearchEnabled && farmerData.id;
 
     const farmOptions = existingFarms.map(farm => ({
@@ -79,6 +85,7 @@ export const FarmerSection = ({
 
     return (
         <div className="flex flex-col gap-6">
+            {/* --- Farmer Details Section (Unchanged) --- */}
             <div className="bg-surface-container rounded-[1.75rem] p-6 shadow-md">
                 <div className="flex items-center justify-between gap-4 mb-6">
                     <div className="flex items-center gap-4">
@@ -121,6 +128,7 @@ export const FarmerSection = ({
                 </div>
             </div>
 
+            {/* --- Farm Details Section (Unchanged) --- */}
             <div className="bg-surface-container rounded-[1.75rem] p-6 shadow-md">
                  <div className="flex items-center justify-between gap-4 mb-6">
                     <div className="flex items-center gap-4">
@@ -136,15 +144,15 @@ export const FarmerSection = ({
                         </button>
                     )}
                 </div>
-                
+
                 {isExistingFarmer && !showNewFarmForm ? (
-                    <SearchableSelect 
-                        id="farm_id" 
-                        name="farm_id" 
-                        label="Choose an existing farm" 
-                        options={farmOptions} 
-                        value={selectedFarmId} 
-                        onChange={setSelectedFarmId} 
+                    <SearchableSelect
+                        id="farm_id"
+                        name="farm_id"
+                        label="Choose an existing farm"
+                        options={farmOptions}
+                        value={selectedFarmId}
+                        onChange={setSelectedFarmId}
                     />
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -155,6 +163,7 @@ export const FarmerSection = ({
                 )}
             </div>
 
+            {/* --- Bank Details Section (Modified) --- */}
             <div className="bg-surface-container rounded-[1.75rem] p-6 shadow-md">
                 <div className="flex items-center justify-between gap-4 mb-6">
                     <div className="flex items-center gap-4">
@@ -170,7 +179,7 @@ export const FarmerSection = ({
                         </button>
                     )}
                 </div>
-                
+
                 {isExistingFarmer && (
                      <div className="space-y-2 border-b border-outline/30 pb-6 mb-6">
                         <p className="text-sm text-on-surface-variant">Select existing accounts:</p>
@@ -190,11 +199,23 @@ export const FarmerSection = ({
                         )) : <p className="text-sm text-on-surface-variant text-center py-2">No existing accounts found.</p>}
                     </div>
                 )}
-                
+
                 {(!isExistingFarmer || showNewBankAccountForm) && (
                     <>
                         {newBankAccounts.map((account, index) => (
-                            <div key={index} className="border-b border-outline/30 pb-6 mb-6 last:border-b-0 last:pb-0 last:mb-0">
+                            // *** MODIFIED: Added relative positioning and Remove button ***
+                            <div key={index} className="relative border-b border-outline/30 pb-6 mb-6 last:border-b-0 last:pb-0 last:mb-0">
+                                {/* Remove button shown only for accounts beyond the first */}
+                                {index > 0 && (
+                                    <button
+                                        type="button"
+                                        onClick={() => removeBankAccount(index)}
+                                        className="absolute top-0 right-0 p-2 text-error hover:bg-error/10 rounded-full"
+                                        aria-label={`Remove Account ${index + 1}`}
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
+                                )}
                                 <p className="text-sm font-medium text-primary mb-2">New Account #{index + 1}</p>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <Input type="text" id={`name_bank_new_${index}`} name="name" label="Name in Bank Account" value={account.name} onChange={(e) => handleNewBankChange(index, e)} required />
@@ -207,9 +228,9 @@ export const FarmerSection = ({
                                 </div>
                             </div>
                         ))}
-                        
-                        <div className="flex justify-end mt-2">
-                            <button type="button" onClick={addBankAccount} className="inline-flex items-center justify-center px-6 py-3 border border-outline text-primary font-medium rounded-full hover:bg-primary/10 transition-colors">
+
+                        <div className="flex justify-end mt-2 ">
+                            <button type="button" onClick={addBankAccount} className="btn inline-flex items-center justify-center px-6 py-3 border border-outline text-primary font-medium rounded-full hover:bg-primary/10 transition-colors ">
                                 <PlusCircle className="w-5 h-5 mr-2" />
                                 Add Another Account
                             </button>

@@ -1,77 +1,122 @@
 // src/components/admin/WelcomeHeader.tsx
-import { CirclePlus, Database, Milestone, Wheat, Beaker, CheckSquare, Edit3, DollarSign, ListChecks } from 'lucide-react'; // Added Edit3, DollarSign
-import { Season } from './Navbar'; // Import the Season type
+"use client";
+
+import { useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { CirclePlus, Database, Edit, Milestone, Wheat, Beaker, CheckSquare, Edit3, FileText, IndianRupee, ListChecks, LoaderCircle } from 'lucide-react';
+import { Season } from './Navbar';
 
 // Define the complete props for the component
 type WelcomeHeaderProps = {
-  onAddLandmarkClick: () => void;
-  onAddVarietyClick: () => void;
-  onEnterSampleDataClick: () => void;   // For Admin Button 1 (Sample Collected list)
-  onSetTemporaryPriceClick: () => void; // For Admin Button 2 (Sampled list)
-  onVerifyPriceClick: () => void;       // For Admin Button 3 (Price Proposed list)
-  activeSeason: Season;                 // To determine which buttons to show
+  onEnterSampleDataClick: () => void;
+  onSetTemporaryPriceClick: () => void;
+  onVerifyPriceClick: () => void;
+  onEditCycleClick: () => void;
+  onGenerateShipmentBillClick: () => void; // Handler for Shipment Bill
+  onProcessFarmerPaymentsClick: () => void; // Handler for Farmer Payments
+  activeSeason: Season;
 };
 
-// Helper component for action buttons for consistency
-const ActionButton = ({ onClick, Icon, label, bgColor }: { onClick?: () => void, Icon: React.ElementType, label: string, bgColor: string }) => (
+// Helper component for action buttons (Unchanged)
+const ActionButton = ({ onClick, Icon, label, bgColor, isPending = false }: {
+    onClick?: () => void,
+    Icon: React.ElementType,
+    label: string,
+    bgColor: string,
+    isPending?: boolean
+}) => (
     <div className="text-center">
         <button
             onClick={onClick}
-            disabled={!onClick}
-            className={`w-16 h-16 ${bgColor} rounded-xl flex items-center justify-center shadow-sm hover:shadow-md transition-shadow disabled:opacity-50 disabled:cursor-not-allowed`} // Changed to rounded-xl
+            disabled={isPending || !onClick}
+            className={`btn w-16 h-16 ${bgColor} rounded-xl flex items-center justify-center shadow-sm hover:shadow-md transition-shadow disabled:opacity-50 disabled:cursor-wait`}
         >
-            <Icon className={`h-8 w-8 ${
-                bgColor.includes('secondary') ? 'text-on-secondary-container' :
-                bgColor.includes('tertiary') ? 'text-on-tertiary-container' :
-                'text-on-primary-container' // Default for primary/others
-            }`} />
+            {isPending ? (
+                <LoaderCircle className="h-8 w-8 animate-spin text-on-primary-container opacity-70" />
+            ) : (
+                <Icon className={`h-8 w-8 ${
+                    bgColor.includes('secondary') ? 'text-on-secondary-container' :
+                    bgColor.includes('tertiary') ? 'text-on-tertiary-container' :
+                    'text-on-primary-container'
+                }`} />
+            )}
         </button>
-        <p className="text-xs mt-2 font-medium text-on-surface-variant">{label}</p>
+        <p className="text-xs mt-2 font-medium text-on-surface-variant">
+            {isPending ? 'Loading...' : label}
+        </p>
     </div>
 );
 
 export default function WelcomeHeader({
-    onAddLandmarkClick,
-    onAddVarietyClick,
-    onEnterSampleDataClick, // Added prop
-    onSetTemporaryPriceClick, // Added prop
-    onVerifyPriceClick, // Added prop
+    onEnterSampleDataClick,
+    onSetTemporaryPriceClick,
+    onVerifyPriceClick,
+    onEditCycleClick,
+    onGenerateShipmentBillClick, // Destructure
+    onProcessFarmerPaymentsClick, // Destructure
     activeSeason
 }: WelcomeHeaderProps) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+
+  const handleStartCycleClick = () => {
+    startTransition(() => {
+      router.push('/admin/cycles/new');
+    });
+  };
+
   return (
     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
       <div>
         <h2 className="text-3xl font-normal text-on-surface">Welcome Back, Admin!</h2>
-        <p className="text-on-surface-variant">Manage the {activeSeason} phase.</p> {/* Updated text */}
+        <p className="text-on-surface-variant">Manage the {activeSeason} phase.</p>
       </div>
-      <div className="flex items-center space-x-2 sm:space-x-4 flex-wrap gap-y-2"> {/* Added flex-wrap and gap-y */}
+      <div className="flex items-center space-x-2 sm:space-x-4 flex-wrap gap-y-2">
         {/* Sowing Buttons */}
         {activeSeason === 'Sowing' && (
           <>
-            <ActionButton onClick={onAddLandmarkClick} Icon={Milestone} label="Add Landmark" bgColor="bg-secondary-container" />
-            <ActionButton onClick={onAddVarietyClick} Icon={Wheat} label="Add Variety" bgColor="bg-tertiary-container" />
-            <ActionButton onClick={() => { /* Add Cycle Logic */ }} Icon={CirclePlus} label="Start Cycle" bgColor="bg-primary-container" />
-            <ActionButton onClick={() => { /* Master Data Logic */ }} Icon={Database} label="Master Data" bgColor="bg-primary-container" />
+            <ActionButton
+              onClick={handleStartCycleClick}
+              Icon={CirclePlus}
+              label="Start Cycle"
+              bgColor="bg-primary-container"
+              isPending={isPending}
+            />
+            <ActionButton
+                onClick={onEditCycleClick}
+                Icon={Edit}
+                label="Edit Cycle"
+                bgColor="bg-secondary-container"
+            />
+            <ActionButton Icon={Database} label="Master Data" bgColor="bg-surface-container" />
           </>
         )}
         {/* Harvesting Buttons */}
         {activeSeason === 'Harvesting' && (
            <>
-             {/* Use Beaker for entering initial sample data */}
+             {/* Existing Harvesting Buttons */}
              <ActionButton onClick={onEnterSampleDataClick} Icon={Beaker} label="Enter Sample Data" bgColor="bg-secondary-container" />
-             {/* Use Edit3 (pencil icon) for adding temporary price to already sampled cycles */}
              <ActionButton onClick={onSetTemporaryPriceClick} Icon={Edit3} label="Set Temp Price" bgColor="bg-tertiary-container" />
-              {/* Use CheckSquare for verifying/confirming the proposed price */}
              <ActionButton onClick={onVerifyPriceClick} Icon={CheckSquare} label="Verify Prices" bgColor="bg-primary-container" />
-             {/* Shipment/Cheque verification button can stay or be moved */}
-             {/* <ActionButton onClick={() => {}} Icon={ListChecks} label="Verify Cheques" bgColor="bg-surface-container" /> */}
 
+             {/* Billing Buttons */}
+             {/* *** CONNECT onClick handlers below *** */}
+             <ActionButton
+                onClick={onGenerateShipmentBillClick} // Connect prop to onClick
+                Icon={FileText}
+                label="Generate Shipment Bill"
+                bgColor="bg-primary-container"
+             />
+             <ActionButton
+                onClick={onProcessFarmerPaymentsClick} // Connect prop to onClick
+                Icon={IndianRupee}
+                label="Farmer Payments"
+                bgColor="bg-secondary-container"
+             />
            </>
         )}
-         {/* Add Growing season buttons here later if needed */}
-         {activeSeason === 'Growing' && (
-             <p className="text-sm text-on-surface-variant">Growing season actions TBD.</p> // Placeholder
-         )}
+         {/* Growing phase currently empty */}
       </div>
     </div>
   );

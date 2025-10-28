@@ -11,9 +11,11 @@ export type SeedVariety = {
 };
 
 export type BankAccount = {
+    bank_name: ReactNode;
     account_id: number;
     account_name: string;
     account_no: string;
+    farmer_id: number;
 };
 
 export type Farm = {

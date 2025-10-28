@@ -125,8 +125,12 @@ export async function createOrUpdateCycle(prevState: FormState, formData: FormDa
     return { message: `Database Error: ${error.message}`, success: false };
   }
 
-  revalidatePath('/admin/dashboard');
-  redirect('/admin/dashboard');
+  revalidatePath('/admin/dashboard'); // Keep revalidating dashboard in case its data changed
+  revalidatePath('/admin/cycles/new'); // Revalidate this page too
+
+  // === UPDATED REDIRECT LINE BELOW ===
+  redirect('/admin/cycles/new'); // Changed from '/admin/dashboard'
+
   // Adding a success message for clarity, although redirect happens immediately
   // return { message: 'Cycle created successfully.', success: true };
 }

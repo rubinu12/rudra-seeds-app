@@ -27,7 +27,7 @@ export const SowingSection = ({ cycleState, landmarkOptions, seedVarietyOptions 
     const yardOptions = [
         { id: 'parabadi', value: 'Parabadi yard', label: 'Parabadi yard' },
         { id: 'dhoraji', value: 'Dhoraji yard', label: 'Dhoraji yard' },
-        { id: 'jalansar', value: 'Jalansar yard', label: 'Jalansar yard' },
+        { id: 'jalansar', value: 'Jalansar yard', label: 'Jalansar yard' }, // Corrected spelling if needed
     ];
 
     return (
@@ -75,27 +75,26 @@ export const SowingSection = ({ cycleState, landmarkOptions, seedVarietyOptions 
                 onChange={handleValueChange}
                 required
               />
-              {/* --- UPDATED Goods Collection Method --- */}
+              {/* --- Goods Collection Method --- */}
               <div>
                   <p className="text-sm font-medium text-on-surface-variant mb-3">Goods Collection Method</p>
-                  <div className="flex flex-col gap-3"> {/* Changed to flex-col for better layout */}
+                  <div className="flex flex-col gap-3">
                       <Radio
-                        id="collection_farm" // Changed ID
-                        name="goods_collection_method" // Changed name to match action
+                        id="collection_farm"
+                        name="goods_collection_method"
                         value="Farm"
                         label="Farm"
-                        checked={cycleData.goods_collection_method === 'Farm'} // Use correct state property
+                        checked={cycleData.goods_collection_method === 'Farm'}
                         onChange={handleValueChange}
                       />
-                      {/* Map through the yard options */}
                       {yardOptions.map(yard => (
                         <Radio
                           key={yard.id}
                           id={`collection_${yard.id}`}
-                          name="goods_collection_method" // Changed name to match action
+                          name="goods_collection_method"
                           value={yard.value}
                           label={yard.label}
-                          checked={cycleData.goods_collection_method === yard.value} // Use correct state property
+                          checked={cycleData.goods_collection_method === yard.value}
                           onChange={handleValueChange}
                         />
                       ))}
@@ -106,12 +105,23 @@ export const SowingSection = ({ cycleState, landmarkOptions, seedVarietyOptions 
     )
 }
 
-// Reusable Radio component for consistency
+// *** Reusable Radio component with CORRECTED styling ***
+// *** Alternative Radio component definition ***
+// Make sure this exact code replaces the old Radio component definition
+// at the bottom of BOTH SowingSection.tsx AND PaymentSection.tsx
+
 const Radio = ({ id, label, ...props }: { id: string, label: string } & React.ComponentProps<'input'>) => (
     <label htmlFor={id} className="flex items-center cursor-pointer text-on-surface">
         <input id={id} type="radio" className="sr-only peer" {...props} />
-        <div className="w-5 h-5 border-2 border-outline rounded-full flex items-center justify-center peer-checked:border-primary">
-            <div className="w-2.5 h-2.5 rounded-full bg-primary scale-0 peer-checked:scale-100 transition-transform"></div>
+        {/* Outer circle - Still uses peer-checked for border */}
+        <div className="w-5 h-5 border-2 border-outline rounded-full flex items-center justify-center peer-checked:border-primary transition-colors">
+            {/* Inner circle - Uses CSS variable for transform */}
+            <div
+                style={{ '--radio-scale': '0' } as React.CSSProperties} // Default scale variable
+                // Apply base styles, transition, and set scale using the variable
+                // On peer-checked, update the CSS variable --radio-scale to 1
+                className="w-2.5 h-2.5 rounded-full bg-primary transition-transform duration-150 ease-in-out scale-[var(--radio-scale)] peer-checked:[--radio-scale:1]"
+            ></div>
         </div>
         <span className="ml-3 font-medium">{label}</span>
     </label>
