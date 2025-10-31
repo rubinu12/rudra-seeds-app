@@ -7,7 +7,7 @@ import { ArrowLeft, ArrowRight, Printer } from 'lucide-react'; // Import navigat
 
 // --- Helper Function to Convert Number to Words (Copied from cheque-test) ---
 function numberToWordsIn(num: number | string): { line1: string; line2: string } {
-    // ... (numberToWordsIn function remains exactly the same as in your cheque-test file) ...
+    // ... (numberToWordsIn function remains exactly the same as before) ...
     const numAsStr = typeof num === 'string' ? num : String(num);
     const [integerPart, decimalPart] = numAsStr.split('.');
     const a = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
@@ -35,10 +35,12 @@ function numberToWordsIn(num: number | string): { line1: string; line2: string }
     let words = toWords(integerPart);
     if (words) { words = `${words} Rupees`; }
     if (decimalPart && parseInt(decimalPart, 10) > 0) {
-        const paiseWords = toWords(decimalPart.padEnd(2, '0'));
+        // Ensure decimal part is treated correctly (e.g., .50 -> fifty)
+        const paisePart = decimalPart.padEnd(2, '0').slice(0, 2); // Get first two decimal digits
+        const paiseWords = toWords(paisePart);
         if (paiseWords) { words += (words ? ' and ' : '') + `${paiseWords} Paise`; }
     }
-    if (words) { words += ' Only'; } else { words = 'Zero Rupees Only';}
+    if (words) { words += ' Only'; } else { words = 'Zero Rupees Only';} // Handle zero amount case
 
     const wordsArray = words.split(' ');
     let line1 = ''; let line2 = ''; const charLimit = 60; let currentLine = '';
@@ -48,6 +50,7 @@ function numberToWordsIn(num: number | string): { line1: string; line2: string }
     if (line1) { line2 = currentLine.trim(); } else { line1 = currentLine.trim(); }
     return { line1, line2 };
 }
+
 
 // --- Client Component ---
 type PrintChequeClientProps = {
@@ -59,10 +62,30 @@ export default function PrintChequeClient({ printData }: PrintChequeClientProps)
     const [currentChequeIndex, setCurrentChequeIndex] = useState(0);
     const [isPrinting, setIsPrinting] = useState(false);
 
-    const dateStr = printData.payment_date || (()=>{ const d=new Date(); return `${String(d.getDate()).padStart(2,'0')}${String(d.getMonth()+1).padStart(2,'0')}${d.getFullYear()}`; })();
+    // *** REMOVED dateStr calculation based on printData.payment_date ***
+    // const dateStr = printData.payment_date || (()=>{ const d=new Date(); return `${String(d.getDate()).padStart(2,'0')}${String(d.getMonth()+1).padStart(2,'0')}${d.getFullYear()}`; })();
 
     const totalCheques = printData.cheques.length;
     const currentCheque = printData.cheques[currentChequeIndex];
+
+    // *** ADD Function to format YYYY-MM-DD to DDMMYYYY ***
+    const formatDueDateForCheque = (isoDate: string | null): string => {
+        if (!isoDate) {
+            // Fallback if due_date is missing (shouldn't happen)
+            const d = new Date();
+            return `${String(d.getDate()).padStart(2, '0')}${String(d.getMonth() + 1).padStart(2, '0')}${d.getFullYear()}`;
+        }
+        try {
+            // Split YYYY-MM-DD and rearrange
+            const [year, month, day] = isoDate.split('-');
+            return `${day}${month}${year}`;
+        } catch {
+            // Fallback for invalid format
+            const d = new Date();
+            return `${String(d.getDate()).padStart(2, '0')}${String(d.getMonth() + 1).padStart(2, '0')}${d.getFullYear()}`;
+        }
+    };
+    // --- End Add ---
 
     const goToNextCheque = () => setCurrentChequeIndex((prev) => (prev + 1) % totalCheques);
     const goToPrevCheque = () => setCurrentChequeIndex((prev) => (prev - 1 + totalCheques) % totalCheques);
@@ -75,10 +98,12 @@ export default function PrintChequeClient({ printData }: PrintChequeClientProps)
     if (!currentCheque) return <div className="p-4 text-center text-error">Error: Cheque data not available.</div>;
 
     const amountInWords = numberToWordsIn(currentCheque.amount);
+    // *** USE the new formatting function for the current cheque's due date ***
+    const chequeDateStr = formatDueDateForCheque(currentCheque.due_date);
 
     return (
         <>
-            {/* Controls Section */}
+            {/* Controls Section (Unchanged) */}
             <div className={`controls p-4 max-w-md mx-auto my-4 border rounded shadow bg-white print:hidden ${isPrinting ? 'invisible' : ''}`}>
                 <h2 className="text-lg font-semibold mb-3">Print Cheque ({currentChequeIndex + 1} of {totalCheques})</h2>
                 <div className="mb-3">
@@ -103,15 +128,17 @@ export default function PrintChequeClient({ printData }: PrintChequeClientProps)
                     {includeAcPayee && (
                         <div className="ac-payee-container"> <div className="ac-payee-text-with-lines">A/C Payee</div> </div>
                     )}
-                    <div className="date-field">{dateStr.split('').map((char, i) => <span key={i}>{char}</span>)}</div>
+                    {/* *** CHANGE: Use chequeDateStr *** */}
+                    <div className="date-field">{chequeDateStr.split('').map((char, i) => <span key={i}>{char}</span>)}</div>
+                    {/* --- End Change --- */}
                     <div className="payee-field">{` ${currentCheque.payee_name} `}</div>
                     <div className="amount-words-1">{amountInWords.line1}</div>
-                    <div className="amount-words-2">{amountInWords.line2}</div>
+                    <div className="amount-words-2">{amountInWords.line2 }</div>
                     <div className="amount-figures">{`** ${currentCheque.amount.toFixed(2)} /-`}</div>
                 </div>
             </div>
 
-            {/* EXACT Styles from cheque-test */}
+            {/* EXACT Styles from cheque-test (Unchanged) */}
             <style jsx global>{`
                 body { font-family: 'Courier New', Courier, monospace; font-size: 14px; }
                 /* Controls section styling */

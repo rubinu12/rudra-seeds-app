@@ -4,10 +4,10 @@
 import React, { useState, useEffect, useMemo, useActionState, useTransition } from 'react';
 import type { FarmerPaymentDetails } from '@/lib/payment-data';
 import type { BankAccount } from '@/lib/definitions';
-import { Input } from '@/components/ui/FormInputs';
+import { Input } from '@/components/ui/FormInputs'; // Make sure Input is imported
 // Placeholder for the actual action import
 import { processFarmerPaymentAction, ProcessPaymentFormState } from '@/app/admin/payments/actions'; // Adjust path if needed
-import { IndianRupee, MinusCircle, Banknote, Hash, CheckCircle, AlertCircle, LoaderCircle, Save } from 'lucide-react';
+import { IndianRupee, MinusCircle, Banknote, Hash, CheckCircle, AlertCircle, LoaderCircle, Save, CalendarDays } from 'lucide-react'; // Added CalendarDays
 
 type ProcessPaymentFormProps = {
     paymentDetails: FarmerPaymentDetails;
@@ -21,32 +21,31 @@ type ChequeEntry = {
     amount: string; // Store as string for input control
 };
 
-const initialProcessState: ProcessPaymentFormState = { message: '', success: false }; // Assuming ProcessPaymentFormState exists
+const initialProcessState: ProcessPaymentFormState = { message: '', success: false };
 
 export default function ProcessPaymentForm({ paymentDetails }: ProcessPaymentFormProps) {
     // State to hold the details for each cheque being generated
     const [chequeEntries, setChequeEntries] = useState<ChequeEntry[]>([]);
     // State to track which bank accounts are selected for payment
     const [selectedAccountIds, setSelectedAccountIds] = useState<Set<number>>(new Set());
+    
+    // *** ADD NEW STATE for Due Days ***
+    const [dueDays, setDueDays] = useState('22'); // Default to 22
 
     const [state, formAction] = useActionState(processFarmerPaymentAction, initialProcessState);
     const [isPending, startTransition] = useTransition();
 
-    // Calculate the total amount allocated across all entered cheques
+    // ... (useMemo calculations for totalChequeAmount, amountsMatch, canSubmit remain the same) ...
     const totalChequeAmount = useMemo(() => {
         return chequeEntries.reduce((sum, entry) => sum + (parseFloat(entry.amount) || 0), 0);
     }, [chequeEntries]);
-
-    // Check if the total cheque amount matches the required net payment
     const amountsMatch = useMemo(() => {
-        // Use a small tolerance for floating point comparisons
         return Math.abs(totalChequeAmount - paymentDetails.net_payment) < 0.01;
     }, [totalChequeAmount, paymentDetails.net_payment]);
-
-    // Can submit if not pending, amounts match, net payment is > 0, and at least one cheque exists
     const canSubmit = !isPending && amountsMatch && paymentDetails.net_payment > 0 && chequeEntries.length > 0;
 
-    // Handle selecting/deselecting a bank account
+
+    // ... (handleAccountSelection and handleChequeInputChange remain the same) ...
     const handleAccountSelection = (account: BankAccount, isSelected: boolean) => {
         setSelectedAccountIds(prev => {
             const newSet = new Set(prev);
@@ -59,25 +58,19 @@ export default function ProcessPaymentForm({ paymentDetails }: ProcessPaymentFor
         });
 
         if (isSelected) {
-            // Add a new blank entry for this account
             setChequeEntries(prev => [
                 ...prev,
                 { accountId: account.account_id, accountName: account.account_name, chequeNumber: '', amount: '' }
             ]);
         } else {
-            // Remove the entry for this account
             setChequeEntries(prev => prev.filter(entry => entry.accountId !== account.account_id));
         }
     };
-
-    // Handle changes in cheque number or amount inputs
     const handleChequeInputChange = (accountId: number, field: 'chequeNumber' | 'amount', value: string) => {
         let sanitizedValue = value;
         if (field === 'amount') {
-            // Allow numbers and one decimal point for amount
             sanitizedValue = value.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1');
         } else {
-             // Allow numbers/chars for cheque number (adjust if needed)
              sanitizedValue = value;
         }
 
@@ -88,6 +81,7 @@ export default function ProcessPaymentForm({ paymentDetails }: ProcessPaymentFor
         );
     };
 
+
     // Prepare data and submit the form
     const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -97,6 +91,9 @@ export default function ProcessPaymentForm({ paymentDetails }: ProcessPaymentFor
         formData.append('cycleId', String(paymentDetails.crop_cycle_id));
         formData.append('grossPayment', String(paymentDetails.gross_payment.toFixed(2)));
         formData.append('netPayment', String(paymentDetails.net_payment.toFixed(2)));
+        
+        // *** ADD dueDays to formData ***
+        formData.append('dueDays', dueDays);
 
         // Prepare cheque_details JSON
         const chequeDetailsForAction = chequeEntries.map(entry => ({
@@ -112,13 +109,11 @@ export default function ProcessPaymentForm({ paymentDetails }: ProcessPaymentFor
         });
     };
 
-     // Handle successful submission (e.g., redirect or show success message and print options)
+     // ... (useEffect for success state remains the same) ...
      useEffect(() => {
         if (state.success) {
-            // TODO: Redirect to a success page or show print buttons here
-            alert('Payment processed and details saved! Next steps: Show print options.');
-            // Example redirect (optional):
-            // router.push(`/admin/payments/${paymentDetails.crop_cycle_id}/success`); // Redirect to a success/print page
+            // This alert will likely not be seen due to the redirect in the action
+            alert('Payment processed and details saved! Redirecting to print...');
         }
     }, [state.success, paymentDetails.crop_cycle_id]);
 
@@ -128,8 +123,9 @@ export default function ProcessPaymentForm({ paymentDetails }: ProcessPaymentFor
     return (
         <form onSubmit={handleSubmit} className="space-y-6">
 
-            {/* --- Calculation Summary --- */}
+            {/* --- Calculation Summary (Unchanged) --- */}
             <section className="bg-surface-container rounded-xl p-4 border border-outline/20">
+                {/* ... (existing gross, deduction, net payment display) ... */}
                 <h2 className="text-lg font-medium text-primary mb-3 border-b pb-2">Payment Calculation</h2>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                     <div className="bg-surface p-3 rounded">
@@ -155,8 +151,31 @@ export default function ProcessPaymentForm({ paymentDetails }: ProcessPaymentFor
                 <h2 className="text-lg font-medium text-primary mb-3 border-b pb-2">Generate Cheque(s)</h2>
                 <p className="text-sm text-on-surface-variant mb-3">Select the bank account(s) to issue cheque(s) for. The total amount must equal the Net Payment Due.</p>
 
-                {/* Bank Account List */}
+                {/* *** ADD Due Days Input *** */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 items-end">
+                    <div className="md:col-span-1">
+                        <Input
+                            id="dueDays"
+                            name="dueDays"
+                            label="Cheque Due Days"
+                            type="number"
+                            min="0"
+                            value={dueDays}
+                            onChange={(e) => setDueDays(e.target.value.replace(/\D/g, ''))} // Allow only non-negative integers
+                            required
+                            disabled={isPending}
+                        />
+                    </div>
+                    <p className="md:col-span-2 text-xs text-on-surface-variant pb-2">
+                        Enter the number of days from today that the cheque(s) will be due (e.g., 22).
+                    </p>
+                </div>
+                {/* *** END Add Due Days Input *** */}
+
+
+                {/* Bank Account List (Unchanged) */}
                  <div className="space-y-2 mb-4 max-h-40 overflow-y-auto border rounded p-2 bg-surface">
+                     {/* ... (existing bank account mapping) ... */}
                      {paymentDetails.bank_accounts.length > 0 ? paymentDetails.bank_accounts.map(account => (
                          <label key={account.account_id} className="flex items-center p-2 rounded hover:bg-primary/5 cursor-pointer">
                              <input
@@ -174,9 +193,10 @@ export default function ProcessPaymentForm({ paymentDetails }: ProcessPaymentFor
                      )}
                  </div>
 
-                 {/* Cheque Entry Forms */}
+                 {/* Cheque Entry Forms (Unchanged) */}
                  {chequeEntries.length > 0 && (
                     <div className="space-y-4 border-t pt-4">
+                        {/* ... (existing chequeEntries.map) ... */}
                         <h3 className="text-md font-medium text-on-surface-variant">Enter Cheque Details:</h3>
                         {chequeEntries.map((entry, index) => (
                             <div key={entry.accountId} className="grid grid-cols-1 md:grid-cols-6 gap-3 items-end bg-surface p-3 rounded border">
@@ -187,7 +207,7 @@ export default function ProcessPaymentForm({ paymentDetails }: ProcessPaymentFor
                                 <div className="md:col-span-2">
                                     <Input
                                         id={`chequeNumber_${entry.accountId}`}
-                                        name={`chequeNumber_${entry.accountId}`} // Name isn't strictly needed if using state
+                                        name={`chequeNumber_${entry.accountId}`}
                                         label="Cheque Number"
                                         value={entry.chequeNumber}
                                         onChange={(e) => handleChequeInputChange(entry.accountId, 'chequeNumber', e.target.value)}
@@ -198,7 +218,7 @@ export default function ProcessPaymentForm({ paymentDetails }: ProcessPaymentFor
                                 <div className="md:col-span-2">
                                     <Input
                                         id={`amount_${entry.accountId}`}
-                                        name={`amount_${entry.accountId}`} // Name isn't strictly needed
+                                        name={`amount_${entry.accountId}`}
                                         label="Amount (₹)"
                                         type="number"
                                         step="0.01"
@@ -214,7 +234,7 @@ export default function ProcessPaymentForm({ paymentDetails }: ProcessPaymentFor
                     </div>
                  )}
 
-                 {/* Amount Check */}
+                 {/* Amount Check (Unchanged) */}
                  {chequeEntries.length > 0 && (
                      <div className={`mt-4 p-2 rounded text-center text-sm font-medium flex items-center justify-center gap-2 ${amountsMatch ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                          {amountsMatch ? <CheckCircle size={16}/> : <AlertCircle size={16}/>}
@@ -223,8 +243,9 @@ export default function ProcessPaymentForm({ paymentDetails }: ProcessPaymentFor
                  )}
             </section>
 
-             {/* --- Submit Button & Feedback --- */}
+             {/* --- Submit Button & Feedback (Unchanged) --- */}
              <div className="pt-4 flex flex-col items-center">
+                {/* ... (existing submit button and error display) ... */}
                 <button
                     type="submit"
                     className="btn bg-primary text-on-primary px-8 py-3 rounded-full flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -238,7 +259,6 @@ export default function ProcessPaymentForm({ paymentDetails }: ProcessPaymentFor
                          {state.message}
                      </p>
                  )}
-                  {/* Display specific field errors */}
                   {state?.errors && Object.entries(state.errors).map(([field, errors]) => (
                       errors && errors.length > 0 && ( <p key={field} className="mt-1 text-xs text-error">{field}: {errors.join(', ')}</p> )
                   ))}

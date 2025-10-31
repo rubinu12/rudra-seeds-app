@@ -1,5 +1,7 @@
 // lib/definitions.ts
 
+import { ReactNode } from "react";
+
 export type Landmark = {
   landmark_id: number;
   landmark_name: string;
@@ -12,6 +14,7 @@ export type SeedVariety = {
 
 export type BankAccount = {
     bank_name: ReactNode;
+
     account_id: number;
     account_name: string;
     account_no: string;
