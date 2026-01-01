@@ -1,7 +1,6 @@
-// @/components/admin/cycles/new/FarmerSection.tsx
+// components/admin/cycles/new/FarmerSection.tsx
 "use client";
 import { useState } from 'react';
-// *** ADD Trash2 icon ***
 import { User, Tractor, PlusCircle, LoaderCircle, X, Search, Check, Trash2 } from 'lucide-react';
 import type { FarmerDetails, Farm, BankAccount } from '@/lib/definitions';
 import { Input, Textarea } from '@/components/ui/FormInputs';
@@ -58,7 +57,6 @@ export const FarmerSection = ({
         setNewBankAccounts(newAccounts);
     };
 
-    // *** ADDED: Function to remove a bank account form ***
     const removeBankAccount = (indexToRemove: number) => {
         setNewBankAccounts((prev: any[]) => prev.filter((_, index) => index !== indexToRemove));
     };
@@ -85,7 +83,7 @@ export const FarmerSection = ({
 
     return (
         <div className="flex flex-col gap-6">
-            {/* --- Farmer Details Section (Unchanged) --- */}
+            {/* --- Farmer Details Section --- */}
             <div className="bg-surface-container rounded-[1.75rem] p-6 shadow-md">
                 <div className="flex items-center justify-between gap-4 mb-6">
                     <div className="flex items-center gap-4">
@@ -128,7 +126,7 @@ export const FarmerSection = ({
                 </div>
             </div>
 
-            {/* --- Farm Details Section (Unchanged) --- */}
+            {/* --- Farm Details Section --- */}
             <div className="bg-surface-container rounded-[1.75rem] p-6 shadow-md">
                  <div className="flex items-center justify-between gap-4 mb-6">
                     <div className="flex items-center gap-4">
@@ -157,13 +155,22 @@ export const FarmerSection = ({
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <SearchableSelect id="villageId" name="villageId" label="Village" options={villageOptions} value={farmData.villageId} onChange={(value: string) => setFarmData((prev: any) => ({ ...prev, villageId: value }))} />
-                        <Input type="number" id="area" name="area" label="Area of Farm (Vigha)" value={farmData.area} onChange={handleFarmChange} required />
+                        <Input 
+                            type="number" 
+                            id="area" 
+                            name="area" 
+                            label="Area of Farm (Vigha)" 
+                            value={farmData.area} 
+                            onChange={handleFarmChange} 
+                            onWheel={(e) => e.currentTarget.blur()}
+                            required 
+                        />
                         <Textarea id="location" name="location" label="Farm Address" value={farmData.location} onChange={handleFarmChange} required className="md:col-span-2" />
                     </div>
                 )}
             </div>
 
-            {/* --- Bank Details Section (Modified) --- */}
+            {/* --- Bank Details Section --- */}
             <div className="bg-surface-container rounded-[1.75rem] p-6 shadow-md">
                 <div className="flex items-center justify-between gap-4 mb-6">
                     <div className="flex items-center gap-4">
@@ -202,32 +209,60 @@ export const FarmerSection = ({
 
                 {(!isExistingFarmer || showNewBankAccountForm) && (
                     <>
-                        {newBankAccounts.map((account, index) => (
-                            // *** MODIFIED: Added relative positioning and Remove button ***
-                            <div key={index} className="relative border-b border-outline/30 pb-6 mb-6 last:border-b-0 last:pb-0 last:mb-0">
-                                {/* Remove button shown only for accounts beyond the first */}
-                                {index > 0 && (
-                                    <button
-                                        type="button"
-                                        onClick={() => removeBankAccount(index)}
-                                        className="absolute top-0 right-0 p-2 text-error hover:bg-error/10 rounded-full"
-                                        aria-label={`Remove Account ${index + 1}`}
-                                    >
-                                        <Trash2 className="w-4 h-4" />
-                                    </button>
-                                )}
-                                <p className="text-sm font-medium text-primary mb-2">New Account #{index + 1}</p>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <Input type="text" id={`name_bank_new_${index}`} name="name" label="Name in Bank Account" value={account.name} onChange={(e) => handleNewBankChange(index, e)} required />
-                                    <Input type="text" id={`name_confirm_new_${index}`} name="name_confirm" label="Confirm Name" value={account.name} onChange={(e) => handleNewBankChange(index, e)} required />
+                        {newBankAccounts.map((account, index) => {
+                            // Check mismatch
+                            const isMismatch = account.name && account.confirmName && account.name !== account.confirmName;
+
+                            return (
+                                <div key={index} className="relative border-b border-outline/30 pb-6 mb-6 last:border-b-0 last:pb-0 last:mb-0">
+                                    {index > 0 && (
+                                        <button
+                                            type="button"
+                                            onClick={() => removeBankAccount(index)}
+                                            className="absolute top-0 right-0 p-2 text-error hover:bg-error/10 rounded-full"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    )}
+                                    <p className="text-sm font-medium text-primary mb-2">New Account #{index + 1}</p>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <Input 
+                                            type="text" 
+                                            id={`name_bank_new_${index}`} 
+                                            name="name" 
+                                            label="Name in Bank Account" 
+                                            value={account.name} 
+                                            onChange={(e) => handleNewBankChange(index, e)} 
+                                            required 
+                                        />
+                                        
+                                        {/* CONFIRM NAME INPUT */}
+                                        <div className="relative">
+                                            <Input 
+                                                type="text" 
+                                                id={`name_confirm_new_${index}`} 
+                                                name="confirmName" 
+                                                label="Confirm Name" 
+                                                value={account.confirmName || ''} 
+                                                onChange={(e) => handleNewBankChange(index, e)} 
+                                                required 
+                                                className={isMismatch ? "border-error text-error focus-within:border-error" : ""}
+                                            />
+                                            {isMismatch && (
+                                                <p className="absolute -bottom-5 left-1 text-xs text-error font-medium animate-pulse">
+                                                    Names do not match!
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
+                                        <Input type="text" id={`number_new_${index}`} name="number" label="Bank Account No." value={account.number} onChange={(e) => handleNewBankChange(index, e)} required />
+                                        <Input type="text" id={`ifsc_new_${index}`} name="ifsc" label="IFSC Code" value={account.ifsc} onChange={(e) => handleNewBankChange(index, e)} required />
+                                        <Input type="text" id={`bankName_new_${index}`} name="bankName" label="Bank Name" value={account.bankName} onChange={(e) => handleNewBankChange(index, e)} required />
+                                    </div>
                                 </div>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
-                                    <Input type="text" id={`number_new_${index}`} name="number" label="Bank Account No." value={account.number} onChange={(e) => handleNewBankChange(index, e)} required />
-                                    <Input type="text" id={`ifsc_new_${index}`} name="ifsc" label="IFSC Code" value={account.ifsc} onChange={(e) => handleNewBankChange(index, e)} required />
-                                    <Input type="text" id={`bankName_new_${index}`} name="bankName" label="Bank Name" value={account.bankName} onChange={(e) => handleNewBankChange(index, e)} required />
-                                </div>
-                            </div>
-                        ))}
+                            );
+                        })}
 
                         <div className="flex justify-end mt-2 ">
                             <button type="button" onClick={addBankAccount} className="btn inline-flex items-center justify-center px-6 py-3 border border-outline text-primary font-medium rounded-full hover:bg-primary/10 transition-colors ">

@@ -1,7 +1,9 @@
-// @/components/admin/cycles/new/SowingSection.tsx
+// components/admin/cycles/new/SowingSection.tsx
 "use client";
+import React from 'react';
 import { Input } from '@/components/ui/FormInputs';
 import SearchableSelect from '@/components/ui/SearchableSelect';
+import { CheckCircle2, Circle, Sprout } from 'lucide-react';
 
 type Option = { value: string; label: string; };
 
@@ -23,23 +25,59 @@ export const SowingSection = ({ cycleState, landmarkOptions, seedVarietyOptions 
         setCycleData((prev: any) => ({ ...prev, [name]: value }));
     };
 
-    // Define the specific yard options
-    const yardOptions = [
-        { id: 'parabadi', value: 'Parabadi yard', label: 'Parabadi yard' },
-        { id: 'dhoraji', value: 'Dhoraji yard', label: 'Dhoraji yard' },
-        { id: 'jalansar', value: 'Jalansar yard', label: 'Jalansar yard' }, // Corrected spelling if needed
+    // Exact text options as requested
+    const collectionOptions = [
+        { value: 'Farm', label: 'Farm' },
+        { value: 'Parabadi yard', label: 'Parabadi yard' },
+        { value: 'Dhoraji yard', label: 'Dhoraji yard' },
+        { value: 'Jalansar yard', label: 'Jalansar yard' },
     ];
+
+    // --- Custom Radio Item ---
+    const StyledRadio = ({ value, label }: { value: string, label: string }) => {
+        const isSelected = cycleData.goods_collection_method === value;
+        return (
+            <label className={`
+                relative flex items-center p-3 rounded-xl border cursor-pointer transition-all duration-200
+                ${isSelected 
+                    ? 'bg-primary/10 border-primary' // Selected: Background + Border
+                    : 'border-outline/20 hover:bg-surface-container-high' // Unselected
+                }
+            `}>
+                <input
+                    type="radio"
+                    name="goods_collection_method"
+                    value={value}
+                    checked={isSelected}
+                    onChange={handleValueChange}
+                    className="sr-only"
+                />
+                
+                {/* Tick Icon if selected, Empty Circle if not */}
+                <div className="mr-3">
+                    {isSelected 
+                        ? <CheckCircle2 className="w-5 h-5 text-primary fill-primary/10" />
+                        : <Circle className="w-5 h-5 text-on-surface-variant/40" />
+                    }
+                </div>
+
+                <span className={`font-medium ${isSelected ? 'text-primary' : 'text-on-surface'}`}>
+                    {label}
+                </span>
+            </label>
+        );
+    };
 
     return (
         <div className="bg-surface-container rounded-[1.75rem] p-6 shadow-md">
           <div className="flex items-center gap-4 mb-6">
-              <div className="w-12 h-12 grid place-items-center rounded-2xl bg-primary-container">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="#21005D" strokeWidth="2"><path d="M17.5 2.5a2.5 2.5 0 0 1 0 5L16 6l-2.5 2.5L15 10l-2.5 2.5L14 14l-2.5 2.5L13 18l-2.5 2.5L9 19l-2.5-2.5L8 15l-2.5-2.5L7 11l-2.5-2.5L6 7l2.5-2.5L10 6Z"></path></svg>
+              <div className="w-12 h-12 grid place-items-center rounded-2xl bg-tertiary-container">
+                  <Sprout className="w-6 h-6 text-on-tertiary-container" />
               </div>
               <h2 className="text-[1.75rem] font-normal text-on-surface">Sowing Details</h2>
           </div>
 
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-6">
               <SearchableSelect
                   id="landmarkId"
                   name="landmarkId"
@@ -56,47 +94,38 @@ export const SowingSection = ({ cycleState, landmarkOptions, seedVarietyOptions 
                   value={cycleData.seedId}
                   onChange={handleSelectChange('seedId')}
               />
-              <Input
-                type="number"
-                id="bags"
-                name="bags"
-                label="Seed Bags"
-                value={cycleData.bags}
-                onChange={handleValueChange}
-                required
-                onWheel={(e) => (e.target as HTMLElement).blur()}
-              />
-              <Input
-                type="date"
-                id="date"
-                name="date"
-                label="Sowing Date"
-                value={cycleData.date}
-                onChange={handleValueChange}
-                required
-              />
-              {/* --- Goods Collection Method --- */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Input
+                    type="date"
+                    id="date"
+                    name="date"
+                    label="Sowing Date"
+                    value={cycleData.date}
+                    onChange={handleValueChange}
+                    required
+                />
+                <Input
+                    type="number"
+                    id="bags"
+                    name="bags"
+                    label="Seed Bags"
+                    value={cycleData.bags}
+                    onChange={handleValueChange}
+                    required
+                    onWheel={(e) => (e.target as HTMLElement).blur()}
+                />
+              </div>
+
+              {/* --- Goods Collection Method (Vertical List) --- */}
               <div>
-                  <p className="text-sm font-medium text-on-surface-variant mb-3">Goods Collection Method</p>
+                  <p className="text-sm font-medium text-on-surface-variant mb-3 px-1">Goods Collection Method</p>
                   <div className="flex flex-col gap-3">
-                      <Radio
-                        id="collection_farm"
-                        name="goods_collection_method"
-                        value="Farm"
-                        label="Farm"
-                        checked={cycleData.goods_collection_method === 'Farm'}
-                        onChange={handleValueChange}
-                      />
-                      {yardOptions.map(yard => (
-                        <Radio
-                          key={yard.id}
-                          id={`collection_${yard.id}`}
-                          name="goods_collection_method"
-                          value={yard.value}
-                          label={yard.label}
-                          checked={cycleData.goods_collection_method === yard.value}
-                          onChange={handleValueChange}
-                        />
+                      {collectionOptions.map((opt) => (
+                          <StyledRadio 
+                              key={opt.value} 
+                              value={opt.value} 
+                              label={opt.label} 
+                          />
                       ))}
                   </div>
               </div>
@@ -104,25 +133,3 @@ export const SowingSection = ({ cycleState, landmarkOptions, seedVarietyOptions 
       </div>
     )
 }
-
-// *** Reusable Radio component with CORRECTED styling ***
-// *** Alternative Radio component definition ***
-// Make sure this exact code replaces the old Radio component definition
-// at the bottom of BOTH SowingSection.tsx AND PaymentSection.tsx
-
-const Radio = ({ id, label, ...props }: { id: string, label: string } & React.ComponentProps<'input'>) => (
-    <label htmlFor={id} className="flex items-center cursor-pointer text-on-surface">
-        <input id={id} type="radio" className="sr-only peer" {...props} />
-        {/* Outer circle - Still uses peer-checked for border */}
-        <div className="w-5 h-5 border-2 border-outline rounded-full flex items-center justify-center peer-checked:border-primary transition-colors">
-            {/* Inner circle - Uses CSS variable for transform */}
-            <div
-                style={{ '--radio-scale': '0' } as React.CSSProperties} // Default scale variable
-                // Apply base styles, transition, and set scale using the variable
-                // On peer-checked, update the CSS variable --radio-scale to 1
-                className="w-2.5 h-2.5 rounded-full bg-primary transition-transform duration-150 ease-in-out scale-[var(--radio-scale)] peer-checked:[--radio-scale:1]"
-            ></div>
-        </div>
-        <span className="ml-3 font-medium">{label}</span>
-    </label>
-);

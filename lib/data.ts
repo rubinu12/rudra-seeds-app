@@ -37,19 +37,21 @@ export async function getSeedVarieties(): Promise<SeedVariety[]> {
 
 // Fetch the seed price for the current year
 export async function getCurrentSeedPrice(): Promise<number> {
-    try {
-        const year = new Date().getFullYear();
-        const data = await sql<{ price_per_bag: string | number }>`
-            SELECT price_per_bag FROM seed_prices WHERE year = ${year} LIMIT 1
-        `;
-        
-        const price = data.rows[0]?.price_per_bag;
-        return Number(price) || 0;
-
-    } catch (error) {
-        console.error('Database Error:', error);
-        throw new Error('Failed to fetch seed price.');
-    }
+  try {
+    // OLD WAY: WHERE year = 2026 (Returns 0 if missing)
+    // NEW WAY: Get the most recent price set in the system
+    const data = await sql`
+      SELECT price_per_bag 
+      FROM seed_prices 
+      ORDER BY year DESC 
+      LIMIT 1;
+    `;
+    
+    return Number(data.rows[0]?.price_per_bag) || 0;
+  } catch (error) {
+    console.error('Database Error:', error);
+    return 0;
+  }
 }
 
 export async function searchFarmers(query: string): Promise<Pick<FarmerDetails, 'farmer_id' | 'name' | 'mobile_number'>[]> {

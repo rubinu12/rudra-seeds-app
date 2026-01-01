@@ -1,8 +1,8 @@
-// @/components/admin/cycles/new/PaymentSection.tsx
+// components/admin/cycles/new/PaymentSection.tsx
 "use client";
-
+import React from 'react';
+import { CreditCard, Banknote, Coins, CheckCircle2, Circle, Save } from 'lucide-react';
 import { Input } from '@/components/ui/FormInputs';
-import { useMemo } from 'react';
 
 type Props = {
     cycleState: [any, Function];
@@ -10,133 +10,131 @@ type Props = {
     seedPrice: number;
     isFormValid: boolean;
     handleClear: () => void;
-    state: { message: string; success: boolean; };
+    state: { message: string; success: boolean };
+    onAddToQueue: () => void;
 }
 
-export const PaymentSection = ({ cycleState, totalCost, seedPrice, isFormValid, handleClear, state }: Props) => {
+export const PaymentSection = ({ 
+    cycleState, totalCost, seedPrice, isFormValid, handleClear, state, onAddToQueue 
+}: Props) => {
     const [cycleData, setCycleData] = cycleState;
 
-    const formattedCost = new Intl.NumberFormat('en-IN', {
-        style: 'currency',
-        currency: 'INR',
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-    }).format(totalCost);
+    const handlePaymentChoiceChange = (choice: string) => {
+        setCycleData((prev: any) => ({ ...prev, paymentChoice: choice }));
+    };
 
-    const amountRemaining = useMemo(() => {
-        if (cycleData.paymentChoice === 'Partial' && cycleData.amountPaid > 0) {
-            const remaining = totalCost - cycleData.amountPaid;
-            return remaining > 0 ? remaining : 0;
-        }
-        return 0;
-    }, [totalCost, cycleData.paymentChoice, cycleData.amountPaid]);
+    const handleAmountPaidChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setCycleData((prev: any) => ({ ...prev, amountPaid: Number(e.target.value) }));
+    };
 
-    const handleChange = (e: React.ChangeEvent<any>) => {
-        const { name, value, type } = e.target;
-        setCycleData((prev: any) => ({
-            ...prev,
-            [name]: type === 'number' ? Number(value) : value
-        }));
+    // Calculate remaining based on current choice
+    const amountRemaining = cycleData.paymentChoice === 'Paid' ? 0 
+                          : cycleData.paymentChoice === 'Credit' ? totalCost 
+                          : Math.max(0, totalCost - cycleData.amountPaid);
+
+    // --- Helper: Horizontal Radio Card ---
+    const RadioCard = ({ value, label, icon: Icon }: any) => {
+        const isSelected = cycleData.paymentChoice === value;
+        return (
+            <label className={`
+                relative flex flex-col items-center justify-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all duration-200
+                ${isSelected 
+                    ? 'border-primary bg-primary/5 shadow-sm' // Selected Style
+                    : 'border-outline/20 hover:border-outline/40 hover:bg-surface-container-high bg-surface' // Unselected Style
+                }
+            `}>
+                <input
+                    type="radio"
+                    name="payment_choice"
+                    value={value}
+                    checked={isSelected}
+                    onChange={() => handlePaymentChoiceChange(value)}
+                    className="sr-only"
+                />
+                
+                {/* Icon Circle */}
+                <div className={`
+                    p-3 rounded-full transition-colors
+                    ${isSelected ? 'bg-primary text-on-primary' : 'bg-surface-container-highest text-on-surface-variant'}
+                `}>
+                    <Icon className="w-6 h-6" />
+                </div>
+
+                {/* Label & Check */}
+                <div className="flex items-center gap-2">
+                    <span className={`font-medium text-sm ${isSelected ? 'text-primary' : 'text-on-surface-variant'}`}>
+                        {label}
+                    </span>
+                    {isSelected && <CheckCircle2 className="w-4 h-4 text-primary" />}
+                </div>
+            </label>
+        );
     };
 
     return (
-        <div className="bg-surface-container rounded-[1.75rem] p-6 shadow-md">
-            <p className="text-base text-on-surface-variant">Total Amount</p>
-            <p className="text-5xl font-light text-on-surface leading-tight mt-2">{formattedCost}</p>
-
-            {cycleData.bags > 0 && (
-                <p className="text-sm text-on-surface-variant mt-1 mb-6">
-                    ({cycleData.bags} bags @ ₹{seedPrice.toFixed(2)}/bag)
-                </p>
-            )}
-
-            <div className="flex items-center gap-6 my-8">
-                <Radio id="paid" name="paymentChoice" value="Paid" label="Paid" checked={cycleData.paymentChoice === 'Paid'} onChange={handleChange} />
-                <Radio id="credit" name="paymentChoice" value="Credit" label="Credit" checked={cycleData.paymentChoice === 'Credit'} onChange={handleChange} />
-                <Radio id="partial" name="paymentChoice" value="Partial" label="Partial" checked={cycleData.paymentChoice === 'Partial'} onChange={handleChange} />
-            </div>
-
-            {cycleData.paymentChoice === 'Partial' && (
-                <div className="space-y-4 mb-8 transition-all duration-300">
-                    <Input
-                        type="number"
-                        id="amountPaid"
-                        name="amountPaid"
-                        label="Amount Paid"
-                        value={cycleData.amountPaid || ''}
-                        onChange={handleChange}
-                        required
-                    />
-                    {cycleData.amountPaid > 0 && (
-                        <p className="text-sm text-on-surface-variant">
-                            Remaining: <span className="font-medium text-error">₹{amountRemaining.toFixed(2)}</span>
-                        </p>
-                    )}
+        <div className="bg-surface-container rounded-[1.75rem] p-6 shadow-md flex flex-col h-full justify-between">
+            <div>
+                {/* Header */}
+                <div className="flex items-center justify-between gap-4 mb-6">
+                    <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 grid place-items-center rounded-2xl bg-secondary-container">
+                            <CreditCard className="w-6 h-6 text-on-secondary-container" />
+                        </div>
+                        <div>
+                             <h2 className="text-[1.75rem] font-normal text-on-surface">Payment</h2>
+                        </div>
+                    </div>
+                    <div className="text-right">
+                        <p className="text-xs text-on-surface-variant uppercase tracking-wider font-semibold">Total Cost</p>
+                        <p className="text-xl font-bold text-primary">₹{totalCost.toLocaleString()}</p>
+                    </div>
                 </div>
-            )}
 
-            <div className="flex flex-col gap-4">
-                {/* === ADDED .btn class below === */}
-                <button
-                    type="submit"
-                    className="btn w-full h-[50px] text-base font-medium rounded-full bg-primary text-on-primary shadow-md hover:shadow-lg hover:-translate-y-px transition-all disabled:bg-on-surface-variant/40 disabled:shadow-none disabled:cursor-not-allowed"
-                    disabled={!isFormValid}
-                >
-                    Save & Create Cycle
-                </button>
-                {/* === ADDED .btn class below === */}
-                <button
-                    type="button"
-                    onClick={handleClear}
-                    className="btn w-full h-[50px] text-base font-medium rounded-full border border-outline text-primary hover:bg-primary/10 transition-colors"
-                >
-                    Cancel
-                </button>
+                {/* --- HORIZONTAL GRID --- */}
+                <div className="grid grid-cols-3 gap-3 mb-6">
+                    <RadioCard value="Paid" label="Paid" icon={Banknote} />
+                    <RadioCard value="Credit" label="Credit" icon={CreditCard} />
+                    <RadioCard value="Partial" label="Partial" icon={Coins} />
+                </div>
+
+                {/* --- PARTIAL PAYMENT INPUT --- */}
+                {cycleData.paymentChoice === 'Partial' && (
+                    <div className="animate-fadeIn mb-6 p-4 bg-surface rounded-xl border border-outline/20">
+                         <Input 
+                            type="number" 
+                            id="amount_paid" 
+                            name="amount_paid" 
+                            label="Amount Paid Now (₹)" 
+                            value={cycleData.amountPaid} 
+                            onChange={handleAmountPaidChange}
+                            onWheel={(e) => e.currentTarget.blur()} // Prevent scroll change
+                            min={0}
+                            max={totalCost}
+                            required
+                        />
+                         <div className="flex justify-between items-center mt-3 px-1">
+                            <span className="text-xs text-on-surface-variant">Balance Due:</span>
+                            <span className="text-sm font-bold text-error">₹{amountRemaining.toLocaleString()}</span>
+                         </div>
+                    </div>
+                )}
             </div>
 
-            {state?.message && (
-                <p className={`mt-4 text-center text-sm font-medium ${state.success ? 'text-green-600' : 'text-error'}`}>
-                    {state.message}
+            {/* --- ACTION BUTTON --- */}
+            <div className="mt-4 pt-6 border-t border-outline/20">
+                <button
+                    type="button" 
+                    onClick={onAddToQueue}
+                    disabled={!isFormValid}
+                    className="w-full h-14 flex items-center justify-center gap-2 bg-primary text-on-primary rounded-xl font-medium text-lg hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none transition-all"
+                >
+                    <Save className="w-5 h-5" />
+                    {isFormValid ? 'Add to Queue' : 'Fill Details to Add'}
+                </button>
+                <p className="text-xs text-center text-on-surface-variant mt-2">
+                    Entry will be added to the pending list below.
                 </p>
-            )}
+            </div>
         </div>
-    )
+    );
 }
-
-// *** Reusable Radio component with CORRECTED styling ***
-
-// *** Alternative Radio component definition ***
-// Make sure this exact code replaces the old Radio component definition
-// at the bottom of BOTH SowingSection.tsx AND PaymentSection.tsx
-
-const Radio = ({ id, label, ...props }: { id: string, label: string } & React.ComponentProps<'input'>) => (
-    <label htmlFor={id} className="flex items-center cursor-pointer text-on-surface">
-        <input id={id} type="radio" className="sr-only peer" {...props} />
-        {/* Outer circle - Still uses peer-checked for border */}
-        <div className="w-5 h-5 border-2 border-outline rounded-full flex items-center justify-center peer-checked:border-primary transition-colors">
-            {/* Inner circle - Uses CSS variable for transform */}
-            <div
-                style={{ '--radio-scale': '0' } as React.CSSProperties} // Default scale variable
-                // Apply base styles, transition, and set scale using the variable
-                // On peer-checked, update the CSS variable --radio-scale to 1
-                className="w-2.5 h-2.5 rounded-full bg-primary transition-transform duration-150 ease-in-out scale-[var(--radio-scale)] peer-checked:[--radio-scale:1]"
-            ></div>
-        </div>
-        <span className="ml-3 font-medium">{label}</span>
-    </label>
-);
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
