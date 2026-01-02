@@ -2,8 +2,9 @@
 "use client";
 
 import { useState } from 'react';
-import { FinancialOverviewData } from '@/lib/admin-data'; // Import the type
-import { IndianRupee, Landmark } from 'lucide-react'; // Using Landmark as a placeholder for Cheque icon
+import { FinancialOverviewData } from '@/lib/admin-data';
+import { IndianRupee, ArrowUpRight } from 'lucide-react';
+import Link from 'next/link';
 
 type Props = {
   data: FinancialOverviewData;
@@ -25,7 +26,13 @@ export default function FinancialOverviewCard({ data }: Props) {
 
   return (
     <div className="bg-surface-container rounded-3xl p-6 shadow-sm">
-      <h3 className="text-xl font-medium text-on-surface mb-1">Financial Overview</h3>
+      <div className="flex justify-between items-start mb-5">
+          <h3 className="text-xl font-medium text-on-surface">Financial Overview</h3>
+          {/* Detailed Link Button */}
+          <Link href="/admin/finance" className="flex items-center gap-1 text-sm font-medium text-primary hover:underline hover:text-primary/80 transition-colors">
+             Detailed <ArrowUpRight className="w-4 h-4" />
+          </Link>
+      </div>
 
       {/* Tab Buttons */}
       <div className="flex gap-2 border-b border-outline/30 mb-5">
@@ -71,7 +78,6 @@ export default function FinancialOverviewCard({ data }: Props) {
   );
 }
 
-// Helper component for displaying financial items
 const FinancialItem = ({ label, value, icon: Icon }: { label: string, value: string | number, icon?: React.ElementType }) => (
   <div className="flex justify-between items-center">
     <p className="text-sm text-on-surface-variant">{label}</p>

@@ -3,8 +3,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { CirclePlus, Database, Edit, Milestone, Wheat, Beaker, CheckSquare, Edit3, FileText, IndianRupee, ListChecks, LoaderCircle } from 'lucide-react';
+import { CirclePlus, Database, Edit, Beaker, CheckSquare, Edit3, FileText, IndianRupee, LoaderCircle, Briefcase } from 'lucide-react';
 import { Season } from './Navbar';
 
 // Define the complete props for the component
@@ -13,12 +12,13 @@ type WelcomeHeaderProps = {
   onSetTemporaryPriceClick: () => void;
   onVerifyPriceClick: () => void;
   onEditCycleClick: () => void;
-  onGenerateShipmentBillClick: () => void; // Handler for Shipment Bill
-  onProcessFarmerPaymentsClick: () => void; // Handler for Farmer Payments
+  onGenerateShipmentBillClick: () => void; 
+  onProcessFarmerPaymentsClick: () => void;
+  onFinanceClick: () => void; // <--- NEW PROP
   activeSeason: Season;
 };
 
-// Helper component for action buttons (Unchanged)
+// Helper component for action buttons (Preserved exactly as is)
 const ActionButton = ({ onClick, Icon, label, bgColor, isPending = false }: {
     onClick?: () => void,
     Icon: React.ElementType,
@@ -53,8 +53,9 @@ export default function WelcomeHeader({
     onSetTemporaryPriceClick,
     onVerifyPriceClick,
     onEditCycleClick,
-    onGenerateShipmentBillClick, // Destructure
-    onProcessFarmerPaymentsClick, // Destructure
+    onGenerateShipmentBillClick,
+    onProcessFarmerPaymentsClick,
+    onFinanceClick, // <--- Destructured
     activeSeason
 }: WelcomeHeaderProps) {
   const router = useRouter();
@@ -95,24 +96,31 @@ export default function WelcomeHeader({
         {/* Harvesting Buttons */}
         {activeSeason === 'Harvesting' && (
            <>
-             {/* Existing Harvesting Buttons */}
-             <ActionButton onClick={onEnterSampleDataClick} Icon={Beaker} label="Enter Sample Data" bgColor="bg-secondary-container" />
+             {/* Core Harvesting Buttons */}
+             <ActionButton onClick={onEnterSampleDataClick} Icon={Beaker} label="Enter Samples" bgColor="bg-secondary-container" />
              <ActionButton onClick={onSetTemporaryPriceClick} Icon={Edit3} label="Set Temp Price" bgColor="bg-tertiary-container" />
              <ActionButton onClick={onVerifyPriceClick} Icon={CheckSquare} label="Verify Prices" bgColor="bg-primary-container" />
 
-             {/* Billing Buttons */}
-             {/* *** CONNECT onClick handlers below *** */}
+             {/* Billing & Payments Buttons */}
              <ActionButton
-                onClick={onGenerateShipmentBillClick} // Connect prop to onClick
+                onClick={onGenerateShipmentBillClick}
                 Icon={FileText}
-                label="Generate Shipment Bill"
+                label="Shipment Bill"
                 bgColor="bg-primary-container"
              />
              <ActionButton
-                onClick={onProcessFarmerPaymentsClick} // Connect prop to onClick
+                onClick={onProcessFarmerPaymentsClick}
                 Icon={IndianRupee}
                 label="Farmer Payments"
                 bgColor="bg-secondary-container"
+             />
+             
+             {/* *** NEW FINANCE BUTTON *** */}
+             <ActionButton
+                onClick={onFinanceClick}
+                Icon={Briefcase}
+                label="Manage Finance"
+                bgColor="bg-tertiary-container"
              />
            </>
         )}

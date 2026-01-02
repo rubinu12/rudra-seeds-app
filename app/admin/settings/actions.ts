@@ -3,156 +3,207 @@
 
 import { sql } from '@vercel/postgres';
 import { revalidatePath } from 'next/cache';
-import { z } from 'zod';
 
-// Define a universal type for our form state responses
 export type FormState = {
-  message: string;
-  success: boolean;
-  error?: string; // Keep error for consistency with other forms
+    message: string;
+    success: boolean;
+    error?: string;
 };
 
-const SETTINGS_PATH = '/admin/settings';
+// --- System Settings ---
 
-// --- App Mode Management ---
-
-/**
- * Updates the global mode for the employee application.
- */
-export async function updateEmployeeMode(newMode: 'Growing' | 'Harvesting'): Promise<FormState> {
-  const schema = z.enum(['Growing', 'Harvesting']);
-  const validatedMode = schema.safeParse(newMode);
-
-  if (!validatedMode.success) {
-    return { message: 'Invalid mode specified.', success: false };
-  }
-
-  try {
-    await sql`
-      UPDATE app_settings
-      SET setting_value = ${validatedMode.data}
-      WHERE setting_key = 'current_employee_mode';
-    `;
-    revalidatePath(SETTINGS_PATH);
-    revalidatePath('/employee/dashboard');
-    return { message: `Employee app mode switched to ${validatedMode.data}.`, success: true };
-  } catch (error) {
-    console.error('Database Error:', error);
-    return { message: 'Database Error: Failed to update app mode.', success: false };
-  }
-}
-
-// --- Master Data Schemas for Validation ---
-const LandmarkSchema = z.object({ landmark_name: z.string().min(3, 'Name must be at least 3 characters.') });
-const VillageSchema = z.object({ village_name: z.string().min(3, 'Name must be at least 3 characters.') });
-const DestCompanySchema = z.object({ company_name: z.string().min(3, 'Name must be at least 3 characters.') });
-const SeedVarietySchema = z.object({
-  variety_name: z.string().min(3, 'Variety name is required.'),
-  crop_type: z.string().min(3, 'Crop type is required.'),
-  company_name: z.string().min(3, 'Company name is required.'),
-  is_default: z.boolean().default(false),
-});
-const ShipCompanySchema = z.object({
-  company_name: z.string().min(3, 'Company name is required.'),
-  owner_name: z.string().optional(),
-  owner_mobile: z.string().optional(),
-});
-
-
-// --- Generic Toggle Function ---
-async function toggleActiveStatus(tableName: string, idColumn: string, id: number): Promise<FormState> {
+export async function updateEmployeeMode(mode: string): Promise<FormState> {
     try {
-        await sql.query(`UPDATE ${tableName} SET is_active = NOT is_active WHERE ${idColumn} = $1`, [id]);
-        revalidatePath(SETTINGS_PATH);
-        return { message: 'Status updated successfully.', success: true };
-    } catch (error) {
-        console.error('Database Error:', error);
-        return { message: 'Database error: Could not update status.', success: false };
-    }
+        await sql`
+            INSERT INTO app_settings (setting_key, setting_value)
+            VALUES ('current_employee_mode', ${mode})
+            ON CONFLICT (setting_key) 
+            DO UPDATE SET setting_value = ${mode};
+        `;
+        revalidatePath('/admin/settings');
+        return { message: 'Employee App Mode Updated', success: true };
+    } catch (e) { return { message: 'Failed to update', success: false, error: String(e) }; }
 }
 
-
-// --- Landmark Actions ---
-export async function addLandmark(prevState: FormState, formData: FormData): Promise<FormState> {
-  const validatedFields = LandmarkSchema.safeParse({ landmark_name: formData.get('landmark_name') });
-  if (!validatedFields.success) return { message: 'Validation Error.', success: false, error: validatedFields.error.flatten().fieldErrors.landmark_name?.[0] };
-  try {
-    await sql`INSERT INTO landmarks (landmark_name) VALUES (${validatedFields.data.landmark_name})`;
-    revalidatePath(SETTINGS_PATH);
-    return { message: 'Landmark added.', success: true };
-  } catch (e: any) {
-    return { message: 'Database Error: Failed to add landmark.', success: false, error: e.message };
-  }
+export async function updateAdminDefaultSeason(season: string): Promise<FormState> {
+    try {
+        await sql`
+            INSERT INTO app_settings (setting_key, setting_value)
+            VALUES ('admin_default_season', ${season})
+            ON CONFLICT (setting_key) 
+            DO UPDATE SET setting_value = ${season};
+        `;
+        // Revalidate both dashboard (to apply change) and settings (to show active state)
+        revalidatePath('/admin/dashboard'); 
+        revalidatePath('/admin/settings');
+        return { message: 'Admin Default Season Updated', success: true };
+    } catch (e) { return { message: 'Failed to update', success: false, error: String(e) }; }
 }
-export async function toggleLandmark(id: number) { return toggleActiveStatus('landmarks', 'landmark_id', id); }
 
+// --- Master Data Actions ---
 
-// --- Village Actions ---
 export async function addVillage(prevState: FormState, formData: FormData): Promise<FormState> {
-  const validatedFields = VillageSchema.safeParse({ village_name: formData.get('village_name') });
-  if (!validatedFields.success) return { message: 'Validation Error.', success: false, error: validatedFields.error.flatten().fieldErrors.village_name?.[0] };
-  try {
-    await sql`INSERT INTO villages (village_name) VALUES (${validatedFields.data.village_name})`;
-    revalidatePath(SETTINGS_PATH);
-    return { message: 'Village added.', success: true };
-  } catch (e: any) {
-    return { message: 'Database Error: Failed to add village.', success: false, error: e.message };
-  }
+    const name = formData.get('village_name') as string;
+    if (!name) return { message: 'Name required', success: false };
+    try {
+        await sql`INSERT INTO villages (village_name, is_active) VALUES (${name}, TRUE)`;
+        revalidatePath('/admin/settings');
+        return { message: 'Added', success: true };
+    } catch (e) { return { message: 'Error', success: false, error: String(e) }; }
 }
-export async function toggleVillage(id: number) { return toggleActiveStatus('villages', 'village_id', id); }
 
-
-// --- Seed Variety Actions ---
-export async function addSeedVariety(prevState: FormState, formData: FormData): Promise<FormState> {
-  const validatedFields = SeedVarietySchema.safeParse({
-    variety_name: formData.get('variety_name'),
-    crop_type: formData.get('crop_type'),
-    company_name: formData.get('company_name'),
-    is_default: formData.get('is_default') === 'on',
-  });
-  if (!validatedFields.success) return { message: 'Validation Error.', success: false, error: 'All fields are required and must be at least 3 characters.' };
-  try {
-    const { variety_name, crop_type, company_name, is_default } = validatedFields.data;
-    await sql`INSERT INTO seeds (variety_name, crop_type, company_name, is_default) VALUES (${variety_name}, ${crop_type}, ${company_name}, ${is_default})`;
-    revalidatePath(SETTINGS_PATH);
-    return { message: 'Seed Variety added.', success: true };
-  } catch (e: any) {
-    return { message: 'Database Error: Failed to add seed variety.', success: false, error: e.message };
-  }
+export async function toggleVillage(id: number): Promise<FormState> {
+    try {
+        await sql`UPDATE villages SET is_active = NOT is_active WHERE village_id = ${id}`;
+        revalidatePath('/admin/settings');
+        return { message: 'Toggled', success: true };
+    } catch (e) { return { message: 'Error', success: false }; }
 }
-export async function toggleSeedVariety(id: number) { return toggleActiveStatus('seeds', 'seed_id', id); }
 
-
-// --- Shipment Company Actions ---
-export async function addShipmentCompany(prevState: FormState, formData: FormData): Promise<FormState> {
-  const validatedFields = ShipCompanySchema.safeParse({
-    company_name: formData.get('company_name'),
-    owner_name: formData.get('owner_name'),
-    owner_mobile: formData.get('owner_mobile'),
-  });
-  if (!validatedFields.success) return { message: 'Validation Error.', success: false, error: 'Company name is required.' };
-  try {
-    const { company_name, owner_name, owner_mobile } = validatedFields.data;
-    await sql`INSERT INTO shipment_companies (company_name, owner_name, owner_mobile) VALUES (${company_name}, ${owner_name}, ${owner_mobile})`;
-    revalidatePath(SETTINGS_PATH);
-    return { message: 'Shipment Company added.', success: true };
-  } catch (e: any) {
-    return { message: 'Database Error: Failed to add company.', success: false, error: e.message };
-  }
+export async function addLandmark(prevState: FormState, formData: FormData): Promise<FormState> {
+    const name = formData.get('landmark_name') as string;
+    if (!name) return { message: 'Name required', success: false };
+    try {
+        await sql`INSERT INTO landmarks (landmark_name, is_active) VALUES (${name}, TRUE)`;
+        revalidatePath('/admin/settings');
+        return { message: 'Added', success: true };
+    } catch (e) { return { message: 'Error', success: false, error: String(e) }; }
 }
-export async function toggleShipmentCompany(id: number) { return toggleActiveStatus('shipment_companies', 'company_id', id); }
 
+export async function toggleLandmark(id: number): Promise<FormState> {
+    try {
+        await sql`UPDATE landmarks SET is_active = NOT is_active WHERE landmark_id = ${id}`;
+        revalidatePath('/admin/settings');
+        return { message: 'Toggled', success: true };
+    } catch (e) { return { message: 'Error', success: false }; }
+}
 
-// --- Destination Company Actions ---
 export async function addDestinationCompany(prevState: FormState, formData: FormData): Promise<FormState> {
-  const validatedFields = DestCompanySchema.safeParse({ company_name: formData.get('company_name') });
-  if (!validatedFields.success) return { message: 'Validation Error.', success: false, error: validatedFields.error.flatten().fieldErrors.company_name?.[0] };
-  try {
-    await sql`INSERT INTO destination_companies (company_name) VALUES (${validatedFields.data.company_name})`;
-    revalidatePath(SETTINGS_PATH);
-    return { message: 'Destination Company added.', success: true };
-  } catch (e: any) {
-    return { message: 'Database Error: Failed to add company.', success: false, error: e.message };
-  }
+    const name = formData.get('company_name') as string;
+    if (!name) return { message: 'Name required', success: false };
+    try {
+        await sql`INSERT INTO destination_companies (company_name, is_active) VALUES (${name}, TRUE)`;
+        revalidatePath('/admin/settings');
+        return { message: 'Added', success: true };
+    } catch (e) { return { message: 'Error', success: false, error: String(e) }; }
 }
-export async function toggleDestinationCompany(id: number) { return toggleActiveStatus('destination_companies', 'dest_company_id', id); }
+
+export async function toggleDestinationCompany(id: number): Promise<FormState> {
+    try {
+        await sql`UPDATE destination_companies SET is_active = NOT is_active WHERE dest_company_id = ${id}`;
+        revalidatePath('/admin/settings');
+        return { message: 'Toggled', success: true };
+    } catch (e) { return { message: 'Error', success: false }; }
+}
+
+// --- Seed Varieties (Updated with Color Logic) ---
+
+export async function addSeedVariety(prevState: FormState, formData: FormData): Promise<FormState> {
+    const name = formData.get('variety_name') as string;
+    const crop = formData.get('crop_type') as string;
+    const company = formData.get('company_name') as string;
+    const color = formData.get('color_code') as string || '#2563eb'; // Default Blue if missing
+
+    if (!name || !crop || !company) return { message: 'Missing fields', success: false };
+    
+    try {
+        // We added color_code to this query
+        await sql`
+            INSERT INTO seeds (variety_name, crop_type, company_name, color_code, is_active) 
+            VALUES (${name}, ${crop}, ${company}, ${color}, TRUE)
+        `;
+        revalidatePath('/admin/settings');
+        return { message: 'Added', success: true };
+    } catch (e) { return { message: 'Error', success: false, error: String(e) }; }
+}
+
+export async function toggleSeedVariety(id: number): Promise<FormState> {
+    try {
+        await sql`UPDATE seeds SET is_active = NOT is_active WHERE seed_id = ${id}`;
+        revalidatePath('/admin/settings');
+        return { message: 'Toggled', success: true };
+    } catch (e) { return { message: 'Error', success: false }; }
+}
+
+// *** NEW: Action to update just the color of a seed ***
+export async function updateSeedColor(seedId: number, color: string): Promise<FormState> {
+    try {
+        await sql`UPDATE seeds SET color_code = ${color} WHERE seed_id = ${seedId}`;
+        revalidatePath('/admin/settings');
+        return { message: 'Color Updated', success: true };
+    } catch (e) { return { message: 'Error updating color', success: false }; }
+}
+
+// --- Shipment Companies ---
+
+export async function addShipmentCompany(prevState: FormState, formData: FormData): Promise<FormState> {
+    const name = formData.get('company_name') as string;
+    const owner = formData.get('owner_name') as string;
+    const mobile = formData.get('owner_mobile') as string;
+    
+    if (!name) return { message: 'Name required', success: false };
+    
+    try {
+        await sql`INSERT INTO shipment_companies (company_name, owner_name, owner_mobile, is_active) VALUES (${name}, ${owner}, ${mobile}, TRUE)`;
+        revalidatePath('/admin/settings');
+        return { message: 'Added', success: true };
+    } catch (e) { return { message: 'Error', success: false, error: String(e) }; }
+}
+
+export async function toggleShipmentCompany(id: number): Promise<FormState> {
+    try {
+        await sql`UPDATE shipment_companies SET is_active = NOT is_active WHERE company_id = ${id}`;
+        revalidatePath('/admin/settings');
+        return { message: 'Toggled', success: true };
+    } catch (e) { return { message: 'Error', success: false }; }
+}
+
+// --- Employee Management (NEW SECTION) ---
+
+export async function addEmployee(prevState: FormState, formData: FormData): Promise<FormState> {
+    const name = formData.get('name') as string;
+    const mobile = formData.get('mobile') as string;
+    const password = formData.get('password') as string; // Ideally hash this
+    
+    if (!name || !mobile || !password) return { message: 'Missing fields', success: false };
+    
+    try {
+        await sql`
+            INSERT INTO users (name, mobile_number, password, role, is_active)
+            VALUES (${name}, ${mobile}, ${password}, 'employee', TRUE)
+        `;
+        revalidatePath('/admin/settings');
+        return { message: 'Employee Added', success: true };
+    } catch (e) { return { message: 'Mobile likely exists', success: false, error: String(e) }; }
+}
+
+export async function toggleEmployee(id: number): Promise<FormState> {
+    try {
+        await sql`UPDATE users SET is_active = NOT is_active WHERE user_id = ${id}`;
+        revalidatePath('/admin/settings');
+        return { message: 'Status Updated', success: true };
+    } catch (e) { return { message: 'Error', success: false }; }
+}
+
+export async function updateEmployeeAssignments(userId: number, seedIds: number[]): Promise<FormState> {
+    try {
+        // 1. Clear existing assignments for this user
+        await sql`DELETE FROM employee_assignments WHERE user_id = ${userId}`;
+        
+        // 2. Add new assignments (batch insert)
+        if (seedIds.length > 0) {
+            // We loop here for simplicity with @vercel/postgres template literals, 
+            // but a single query with values list is more efficient in raw PG.
+            for (const seedId of seedIds) {
+                await sql`
+                    INSERT INTO employee_assignments (user_id, seed_id) 
+                    VALUES (${userId}, ${seedId})
+                    ON CONFLICT DO NOTHING;
+                `;
+            }
+        }
+        
+        revalidatePath('/admin/settings');
+        return { message: 'Assignments Updated', success: true };
+    } catch (e) { return { message: 'Error saving assignments', success: false, error: String(e) }; }
+}

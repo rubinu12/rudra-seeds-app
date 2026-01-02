@@ -330,8 +330,8 @@ export async function getCycleDetailsForEditing(cycleId: number): Promise<CycleD
           variety_name: row.variety_name as string,
           village_name: row.village_name as string,
           landmark_name: row.landmark_name as string,
-          sowing_date: '',
-          farmer_name: ''
+          sowing_date: row.sowing_date as string,
+          farmer_name: row.farmer_name as string
         };
 
         return formattedData;
@@ -340,4 +340,21 @@ export async function getCycleDetailsForEditing(cycleId: number): Promise<CycleD
         console.error(`Database Error fetching details for cycle ${cycleId}:`, error);
         throw new Error(`Failed to fetch cycle details for editing.`);
     }
+}
+
+// *** NEW FUNCTION: Fetch Destination Companies ***
+export async function getDestinationCompanies() {
+  try {
+    // Fetches active companies for the dropdown
+    const result = await sql`
+      SELECT dest_company_id as id, company_name as name 
+      FROM destination_companies 
+      WHERE is_active = TRUE 
+      ORDER BY company_name
+    `;
+    return result.rows.map(r => ({ id: Number(r.id), name: r.name }));
+  } catch (error) {
+    console.error('Database Error fetching destination companies:', error);
+    return [];
+  }
 }
