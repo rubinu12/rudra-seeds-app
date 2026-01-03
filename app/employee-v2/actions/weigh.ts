@@ -3,33 +3,44 @@
 import { sql } from '@vercel/postgres';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-
-const CURRENT_USER_ID = 10; // TODO: Replace with dynamic Auth ID when ready
+import { auth } from '@/auth';
 
 // --- Fetch Pending Weighing List ---
 export async function getPendingWeighing() {
     try {
-        console.log(`⚖️ Fetching Weighing List`);
+        const session = await auth();
+
+        // 1. Security Check
+        if (!session || !session.user || !session.user.id) {
+            console.error("Unauthorized access to weighing list");
+            return [];
+        }
+
+        const currentUserId = Number(session.user.id);
+        
+        console.log(`⚖️ Fetching Weighing List for User ID: ${currentUserId}`);
 
         const result = await sql`
             SELECT 
                 cc.crop_cycle_id,
                 f.name as farmer_name,
                 f.mobile_number,
-                v.village_name, l.landmark_name,
-                s.variety_name as seed_variety, s.color_code,
+                v.village_name, 
+                l.landmark_name,
+                s.variety_name as seed_variety, 
+                s.color_code,
                 cc.status, 
-                cc.lot_no, -- Needed for client-side hint or verification context
+                cc.lot_no, -- Required for Client-Side "Gate" validation
                 cc.goods_collection_method as collection_loc,
                 
-                -- Threshold Data (Hidden from UI, used for calculation if needed, but safer to calc on server)
+                -- Threshold Data 
                 cc.seed_bags_purchased,
                 cc.seed_bags_returned,
 
                 -- Assignment Check
                 EXISTS (
                     SELECT 1 FROM employee_assignments ea 
-                    WHERE ea.seed_id = cc.seed_id AND ea.user_id = ${CURRENT_USER_ID}
+                    WHERE ea.seed_id = cc.seed_id AND ea.user_id = ${currentUserId}
                 ) as is_assigned
                 
             FROM crop_cycles cc
@@ -86,8 +97,7 @@ export async function submitWeighing(prevState: any, formData: FormData) {
 
         const cycle = check.rows[0];
 
-        // 2. Lot Number Verification
-        // Note: Case-insensitive check is usually better for manual entry
+        // 2. Lot Number Verification (Server Side Safety Net)
         if (cycle.lot_no?.trim().toUpperCase() !== lotNo.trim().toUpperCase()) {
             return { 
                 success: false, 
@@ -110,7 +120,7 @@ export async function submitWeighing(prevState: any, formData: FormData) {
             SET 
                 status = 'Weighed',
                 quantity_in_bags = ${bags},
-                bags_remaining_to_load = ${bags}, -- Initial loadable amount
+                bags_remaining_to_load = ${bags},
                 weighing_date = NOW(),
                 is_production_flagged = ${isFlagged}
             WHERE crop_cycle_id = ${cropCycleId}

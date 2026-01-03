@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import SmartHeader from "@/components/employee-v2/SmartHeader";
 import UniversalCard from "@/components/employee-v2/UniversalCard";
 import SampleTab from "@/components/employee-v2/tabs/SampleTab";
+import WeighingTab from "@/components/employee-v2/tabs/WeighingTab"; // <--- ADDED IMPORT
 
 // Actions
 import { searchGlobalCycles } from "@/app/employee-v2/actions/search";
@@ -132,11 +133,12 @@ export default function DashboardClient({
         ) : (
           <>
             {activeTab === "sample" && <SampleTab location={location} />}
+            
+            {/* --- UPDATED: WEIGHING TAB --- */}
             {activeTab === "weigh" && (
-              <div className="text-center opacity-40 mt-10 text-sm">
-                Weigh List Coming Soon
-              </div>
+                <WeighingTab collectionFilter={location} />
             )}
+
             {activeTab === "load" && (
               <div className="text-center opacity-40 mt-10 text-sm">
                 Load List Coming Soon

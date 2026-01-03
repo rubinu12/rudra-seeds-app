@@ -6,7 +6,7 @@ import type {
     CycleForSampleEntry,
     CycleForPriceApproval,
     CycleForPriceVerification
-} from './definitions'; // Assuming definitions.ts exists and has these types
+} from './definitions';
 
 // --- Type Definitions ---
 export type CyclePipelineStatus = {
@@ -20,40 +20,31 @@ export type ShipmentSummaryData = { shipments: ShipmentSummaryItem[]; chequesToV
 
 // *** ADDED TYPE for Edit Modal ***
 export type CycleDetailsForEditing = {
-    // Cycle Info
     crop_cycle_id: number;
     crop_cycle_year: number;
     season: string | null;
-    status: string; // Keep status for context
-    sowing_date: string; // Keep as string (YYYY-MM-DD)
+    status: string;
+    sowing_date: string;
     seed_bags_purchased: number;
-    seed_bags_returned: number | null; // Nullable
+    seed_bags_returned: number | null;
     goods_collection_method: string | null;
     seed_cost: number | null;
-    seed_payment_status: string | null; // 'Paid', 'Credit', 'Partial'
+    seed_payment_status: string | null;
     amount_paid: number | null;
     amount_remaining: number | null;
-    bank_accounts: string | null; // JSON string of selected account IDs
-
-    // Farmer Info
+    bank_accounts: string | null;
     farmer_id: number;
     farmer_name: string;
     mobile_number: string | null;
     aadhar_number: string | null;
     home_address: string | null;
-
-    // Farm Info
     farm_id: number;
     location_name: string;
     area_in_vigha: number | null;
     landmark_id: number;
     village_id: number;
-
-    // Seed Info
     seed_id: number;
-    variety_name: string; // Include variety name for display
-
-    // Related Info (for context or dropdowns if needed later)
+    variety_name: string;
     village_name: string;
     landmark_name: string;
 };
@@ -62,10 +53,8 @@ export type DispatchedShipmentInfo = {
     shipment_id: number;
     vehicle_number: string | null;
     destination_company_name: string | null;
-    dispatch_date: string | null; // Formatted date string
+    dispatch_date: string | null;
     total_bags: number | null;
-    // Add company_payment if needed to show if already billed
-    // company_payment: number | null;
 };
 
 
@@ -74,7 +63,7 @@ export type DispatchedShipmentInfo = {
 export async function getCyclePipelineStatus(): Promise<CyclePipelineStatus> {
   try {
     const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-    const currentYear = new Date().getFullYear();
+    const currentYear = new Date().getFullYear(); // Pipeline stats can stay strictly current year if preferred
     const queryText = `
       SELECT
         COUNT(*) FILTER (WHERE status = 'Harvested') as total_harvested,
@@ -84,7 +73,7 @@ export async function getCyclePipelineStatus(): Promise<CyclePipelineStatus> {
         COUNT(*) FILTER (WHERE status = 'Harvested' AND harvesting_date >= $1) as last_24h_harvested,
         COUNT(*) FILTER (WHERE (status = 'Sampled' OR status = 'Price Proposed') AND sampling_date >= $1) as last_24h_sampled,
         COUNT(*) FILTER (WHERE status = 'Priced' AND pricing_date >= $1) as last_24h_priced,
-        COUNT(*) FILTER (WHERE status = 'Weighed' /* AND weighing_date >= $1 */) as last_24h_weighed
+        COUNT(*) FILTER (WHERE status = 'Weighed') as last_24h_weighed
       FROM crop_cycles
       WHERE crop_cycle_year = $2;
     `;
@@ -110,20 +99,17 @@ export async function getCyclePipelineStatus(): Promise<CyclePipelineStatus> {
   }
 }
 
-
-
 export async function getCriticalAlerts(): Promise<CriticalAlertsData> {
   try {
     const twelveDaysAgo = new Date(Date.now() - 12 * 24 * 60 * 60 * 1000).toISOString();
-    const currentYear = new Date().getFullYear();
+    // Alerts should show OLD items, so we REMOVE the year filter here too to catch everything
     const queryText = `
       SELECT
         COUNT(*) FILTER (WHERE status = 'Priced' AND pricing_date <= $1) as priced_over_12_days_not_weighed,
         COUNT(*) FILTER (WHERE status = 'Weighed') as weighed_not_loaded
-      FROM crop_cycles
-      WHERE crop_cycle_year = $2;
+      FROM crop_cycles; 
     `;
-    const result = await sql.query(queryText, [twelveDaysAgo, currentYear]);
+    const result = await sql.query(queryText, [twelveDaysAgo]);
     const data = result.rows[0];
     return {
       pricedOver12DaysNotWeighed: Number(data.priced_over_12_days_not_weighed) || 0,
@@ -148,7 +134,7 @@ export async function getFinancialOverview(): Promise<FinancialOverviewData> {
         COUNT(*) FILTER (WHERE cheque_due_date >= $2 AND cheque_due_date <= $3) as cheques_due_today_count,
         SUM(final_payment) FILTER (WHERE cheque_due_date >= $2 AND cheque_due_date <= $3) as cheques_due_today_amount
       FROM crop_cycles
-      WHERE crop_cycle_year = $4;
+      WHERE crop_cycle_year = $4; 
     `;
     const result = await sql.query(queryText, [relevantStatusesForPayment, todayStart.toISOString(), todayEnd.toISOString(), currentYear]);
     const data = result.rows[0];
@@ -171,16 +157,16 @@ export async function getFinancialOverview(): Promise<FinancialOverviewData> {
 export async function getShipmentSummary(): Promise<ShipmentSummaryData> {
     try {
         const currentYear = new Date().getFullYear();
-        const shipmentQueryText = `SELECT 'Placeholder Company' as destinationCompany, 0 as totalValueSent LIMIT 0`; // Placeholder, needs actual implementation
+        const shipmentQueryText = `SELECT 'Placeholder Company' as destinationCompany, 0 as totalValueSent LIMIT 0`;
         const shipmentResults = await sql.query(shipmentQueryText, []);
-        const chequeQueryText = `SELECT COUNT(*) as count FROM crop_cycles WHERE /* condition for cheques to verify */ crop_cycle_year = $1 LIMIT 1`; // Placeholder, needs actual implementation
+        const chequeQueryText = `SELECT COUNT(*) as count FROM crop_cycles WHERE crop_cycle_year = $1 LIMIT 1`; 
         const chequeResult = await sql.query(chequeQueryText, [currentYear]);
         const chequesToVerifyCount = Number(chequeResult.rows[0]?.count) || 0;
         return {
             shipments: shipmentResults.rows.map(row => ({
                 destinationCompany: row.destinationcompany,
                 totalValueSent: Number(row.totalvaluesent) || 0,
-                totalPaymentReceived: 0, // Placeholder
+                totalPaymentReceived: 0,
             })),
             chequesToVerifyCount: chequesToVerifyCount,
         };
@@ -190,19 +176,22 @@ export async function getShipmentSummary(): Promise<ShipmentSummaryData> {
     }
 }
 
+// --- FIX STARTS HERE ---
+
+// 1. Pending Sample Entry: REMOVE Year Filter
 export async function getCyclesPendingSampleEntry(): Promise<CycleForSampleEntry[]> {
     try {
-        const currentYear = new Date().getFullYear();
         const queryText = `
             SELECT
                 cc.crop_cycle_id, f.name as farmer_name, s.variety_name as seed_variety,
                 cc.sample_collection_date::text
             FROM crop_cycles cc
             JOIN farmers f ON cc.farmer_id = f.farmer_id JOIN seeds s ON cc.seed_id = s.seed_id
-            WHERE cc.status = 'Sample Collected' AND cc.crop_cycle_year = $1
+            WHERE cc.status = 'Sample Collected' 
+            -- Removed Year Filter: Show all pending work
             ORDER BY cc.sample_collection_date ASC NULLS FIRST;
         `;
-        const result = await sql.query(queryText, [currentYear]);
+        const result = await sql.query(queryText, []);
         return result.rows as CycleForSampleEntry[];
     } catch (error) {
         console.error('Database Error fetching cycles pending sample entry:', error);
@@ -210,9 +199,9 @@ export async function getCyclesPendingSampleEntry(): Promise<CycleForSampleEntry
     }
 }
 
+// 2. Pending Temp Price: REMOVE Year Filter
 export async function getCyclesPendingTempPrice(): Promise<CycleForPriceApproval[]> {
     try {
-        const currentYear = new Date().getFullYear();
         const queryText = `
             SELECT
                 cc.crop_cycle_id, f.name as farmer_name, s.variety_name as seed_variety,
@@ -221,10 +210,11 @@ export async function getCyclesPendingTempPrice(): Promise<CycleForPriceApproval
                 cc.sample_non_seed
             FROM crop_cycles cc
             JOIN farmers f ON cc.farmer_id = f.farmer_id JOIN seeds s ON cc.seed_id = s.seed_id
-            WHERE cc.status = 'Sampled' AND cc.crop_cycle_year = $1
+            WHERE cc.status = 'Sampled' 
+            -- Removed Year Filter: Show all pending work
             ORDER BY cc.sampling_date ASC NULLS FIRST;
         `;
-        const result = await sql.query(queryText, [currentYear]);
+        const result = await sql.query(queryText, []);
         return result.rows as CycleForPriceApproval[];
     } catch (error) {
         console.error('Database Error fetching cycles pending temp price:', error);
@@ -232,9 +222,9 @@ export async function getCyclesPendingTempPrice(): Promise<CycleForPriceApproval
     }
 }
 
+// 3. Pending Verification: REMOVE Year Filter
 export async function getCyclesPendingVerification(): Promise<CycleForPriceVerification[]> {
     try {
-        const currentYear = new Date().getFullYear();
         const queryText = `
             SELECT
                 cc.crop_cycle_id,
@@ -252,10 +242,10 @@ export async function getCyclesPendingVerification(): Promise<CycleForPriceVerif
             JOIN farmers f ON cc.farmer_id = f.farmer_id
             JOIN seeds s ON cc.seed_id = s.seed_id
             WHERE cc.status = 'Price Proposed'
-              AND cc.crop_cycle_year = $1
+            -- Removed Year Filter: Show all pending work
             ORDER BY cc.sampling_date ASC NULLS FIRST;
         `;
-        const result = await sql.query(queryText, [currentYear]);
+        const result = await sql.query(queryText, []);
         return result.rows as CycleForPriceVerification[];
     } catch (error) {
         console.error('Database Error fetching cycles pending verification:', error);
@@ -263,7 +253,8 @@ export async function getCyclesPendingVerification(): Promise<CycleForPriceVerif
     }
 }
 
-// *** ADDED FUNCTION for Edit Modal ***
+// --- FIX ENDS HERE ---
+
 export async function getCycleDetailsForEditing(cycleId: number): Promise<CycleDetailsForEditing | null> {
     if (isNaN(cycleId) || cycleId <= 0) {
         console.error("Invalid cycleId provided:", cycleId);
@@ -273,10 +264,10 @@ export async function getCycleDetailsForEditing(cycleId: number): Promise<CycleD
         const result = await sql`
             SELECT
                 cc.crop_cycle_id, cc.crop_cycle_year, cc.season, cc.status,
-                TO_CHAR(cc.sowing_date, 'YYYY-MM-DD') as sowing_date, -- Format date
+                TO_CHAR(cc.sowing_date, 'YYYY-MM-DD') as sowing_date,
                 cc.seed_bags_purchased, cc.seed_bags_returned, cc.goods_collection_method,
                 cc.seed_cost, cc.seed_payment_status, cc.amount_paid, cc.amount_remaining,
-                cc.bank_accounts, -- Assuming this is stored as JSON string '[ "id1", "id2" ]'
+                cc.bank_accounts,
 
                 f.farmer_id, f.name as farmer_name, f.mobile_number, f.aadhar_number, f.home_address,
 
@@ -296,10 +287,9 @@ export async function getCycleDetailsForEditing(cycleId: number): Promise<CycleD
         `;
 
         if (result.rowCount === 0) {
-            return null; // Cycle not found
+            return null;
         }
 
-        // Ensure numeric types are correctly handled (pg returns strings sometimes)
         const row = result.rows[0];
         const formattedData: CycleDetailsForEditing = {
           ...row,
@@ -316,13 +306,11 @@ export async function getCycleDetailsForEditing(cycleId: number): Promise<CycleD
           landmark_id: Number(row.landmark_id),
           village_id: Number(row.village_id),
           seed_id: Number(row.seed_id),
-          // Strings and nulls should be fine as they are
-          // Explicitly cast potentially null fields that should be strings or null
           season: row.season as string | null,
           status: row.status as string,
           goods_collection_method: row.goods_collection_method as string | null,
           seed_payment_status: row.seed_payment_status as string | null,
-          bank_accounts: row.bank_accounts as string | null, // Assuming JSON string
+          bank_accounts: row.bank_accounts as string | null,
           mobile_number: row.mobile_number as string | null,
           aadhar_number: row.aadhar_number as string | null,
           home_address: row.home_address as string | null,
@@ -342,10 +330,8 @@ export async function getCycleDetailsForEditing(cycleId: number): Promise<CycleD
     }
 }
 
-// *** NEW FUNCTION: Fetch Destination Companies ***
 export async function getDestinationCompanies() {
   try {
-    // Fetches active companies for the dropdown
     const result = await sql`
       SELECT dest_company_id as id, company_name as name 
       FROM destination_companies 
