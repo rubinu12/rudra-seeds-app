@@ -4,14 +4,15 @@ import {
     getAdminDefaultSeason,
     getSettingsLandmarks,
     getSettingsVillages,
-    getSettingsDestinationCompanies,
+    getSettingsDestinationCompanies, // Used for Partners & Seed Sources
     getSettingsSeedVarieties,
     getSettingsShipmentCompanies,
-    getSettingsEmployees // <--- IMPORT THIS
+    getSettingsEmployees
 } from './data';
-import { SettingsClientPage } from './SettingsClientPage';
+import SettingsClientPage from './SettingsClientPage';
 
 export default async function SettingsPage() {
+    // Parallel data fetching for maximum performance
     const [
         employeeMode,
         adminSeason,
@@ -20,7 +21,7 @@ export default async function SettingsPage() {
         destCompanies,
         seedVarieties,
         shipmentCompanies,
-        employees // <--- NEW DATA
+        employees
     ] = await Promise.all([
         getEmployeeMode(),
         getAdminDefaultSeason(),
@@ -29,7 +30,7 @@ export default async function SettingsPage() {
         getSettingsDestinationCompanies(),
         getSettingsSeedVarieties(),
         getSettingsShipmentCompanies(),
-        getSettingsEmployees() // <--- FETCH CALL
+        getSettingsEmployees()
     ]);
 
     return (
@@ -38,10 +39,10 @@ export default async function SettingsPage() {
             initialAdminSeason={adminSeason}
             landmarks={landmarks}
             villages={villages}
-            destCompanies={destCompanies}
+            destCompanies={destCompanies} // Passes to Client for both "Partners" list and "Seed Form" dropdown
             seedVarieties={seedVarieties}
             shipmentCompanies={shipmentCompanies}
-            employees={employees} // <--- PASS PROP
+            employees={employees}
         />
     );
 }

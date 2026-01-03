@@ -7,11 +7,13 @@ export type MasterDataItem = {
     is_active: boolean;
 };
 
+// Updated Type for Seeds to include Company Name
 export type SeedVarietySetting = {
     id: number;
     name: string;
     crop_type: string;
-    company_name: string;
+    company_id: number;     
+    company_name: string;   // Fetched via JOIN
     color_code: string;
     is_active: boolean;
 };
@@ -29,11 +31,11 @@ export type EmployeeSetting = {
     name: string;
     mobile: string;
     role: string;
-    assigned_seeds: number[]; // Array of Seed IDs (e.g. [1, 5, 8])
+    assigned_seeds: number[]; 
     is_active: boolean;
 };
 
-// --- SETTINGS FETCHERS ---
+// --- FETCHERS ---
 
 export async function getEmployeeMode(): Promise<'Growing' | 'Harvesting'> {
     try {
@@ -66,11 +68,20 @@ export async function getSettingsDestinationCompanies(): Promise<MasterDataItem[
     return rows as MasterDataItem[];
 }
 
+// *** UPDATED: JOIN to fetch company name for display ***
 export async function getSettingsSeedVarieties(): Promise<SeedVarietySetting[]> {
     const { rows } = await sql`
-        SELECT seed_id as id, variety_name as name, crop_type, company_name, color_code, is_active 
-        FROM seeds 
-        ORDER BY variety_name;
+        SELECT 
+            s.seed_id as id, 
+            s.variety_name as name, 
+            s.crop_type, 
+            s.dest_company_id as company_id,
+            d.company_name, 
+            s.color_code, 
+            s.is_active 
+        FROM seeds s
+        LEFT JOIN destination_companies d ON s.dest_company_id = d.dest_company_id
+        ORDER BY s.variety_name;
     `;
     return rows.map(r => ({ ...r, color_code: r.color_code || '#2563eb' })) as SeedVarietySetting[];
 }
@@ -84,11 +95,10 @@ export async function getSettingsShipmentCompanies(): Promise<ShipmentCompanySet
     return rows as ShipmentCompanySetting[];
 }
 
-// *** NEW: Fetch Employees with Assignments ***
 export async function getSettingsEmployees(): Promise<EmployeeSetting[]> {
     try {
         const usersResult = await sql`
-            SELECT user_id as id, name, mobile_number as mobile, role, is_active 
+            SELECT user_id as id, name, mobile_number as mobile, role 
             FROM users 
             WHERE role != 'admin' 
             ORDER BY name;
