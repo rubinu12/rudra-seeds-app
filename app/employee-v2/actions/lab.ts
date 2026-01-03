@@ -1,3 +1,4 @@
+// app/employee-v2/actions/lab.ts
 "use server";
 
 import { sql } from '@vercel/postgres';
@@ -32,8 +33,7 @@ export async function getSampleDetails(cycleId: number) {
 
         const data = result.rows[0];
         
-        // Safe Date Formatting (Check if column exists first)
-        // If 'harvesting_date' doesn't exist, we try 'created_at', or default to Today
+        // Safe Date Formatting
         const dateRaw = data.harvesting_date || data.created_at || new Date();
         try {
             data.formatted_date = new Date(dateRaw).toLocaleDateString('en-IN', {
@@ -58,9 +58,7 @@ export async function submitLabData(cycleId: number, formData: FormData) {
         const color = formData.get('color_grade');
         const remarks = formData.get('remarks');
         
-        // We try to save to 'goods_collection_method'. 
-        // If this column doesn't exist in your DB, this specific UPDATE will fail.
-        // Ensure you have this column or remove this line.
+        // Ensure you have this column in your DB or remove this line if it causes errors
         const collection_method = formData.get('goods_collection_method');
 
         await sql`
@@ -72,11 +70,12 @@ export async function submitLabData(cycleId: number, formData: FormData) {
                 sample_non_seed = ${non_seed?.toString()},
                 color_grade = ${color?.toString()},
                 
-                -- Ensure this column exists in your DB!
                 goods_collection_method = ${collection_method?.toString()},
-                
                 sample_remarks = ${remarks?.toString()},
-                status = 'Lab Tested', 
+                
+                -- ⚠️ FIXED: Changed from 'Lab Tested' to 'Sampled' to match Admin App queries
+                status = 'Sampled', 
+                
                 sampling_date = NOW()
             WHERE crop_cycle_id = ${cycleId}
         `;
