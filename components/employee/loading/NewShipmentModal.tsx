@@ -1,204 +1,253 @@
-// components/employee/loading/NewShipmentModal.tsx
 "use client";
 
-import React, { useState, useEffect, useRef } from 'react';
-import { useActionState } from 'react';
-import Modal from '@/components/ui/Modal';
-import { Input, Select } from '@/components/ui/FormInputs'; // Reusing existing FormInputs
-import SearchableSelect from '@/components/ui/SearchableSelect';
-import { startNewShipment, LoadingFormState } from '@/app/employee/loading/actions';
-import { MasterDataItem, ShipmentCompanySetting } from '@/app/admin/settings/data';
-import { Truck, Save, LoaderCircle, Package, X } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { getShipmentMasterData, createShipment } from '@/app/employee-v2/actions/shipments';
+import { LoaderCircle, Truck, Briefcase, Leaf, Scale, User, Phone, MapPin, Building, Search, X, Check } from 'lucide-react';
+import { toast } from 'sonner';
 
-type NewShipmentModalProps = {
+type Props = {
     isOpen: boolean;
     onClose: () => void;
-    transportCompanies: ShipmentCompanySetting[]; // Pass active companies
-    destinationCompanies: MasterDataItem[]; // Pass active companies
-    onShipmentStarted: (shipmentId: number) => void; // Callback after successful creation
+    location: string;
+    onSuccess: () => void;
 };
 
-// Initial state for the startNewShipment action
-const initialState: LoadingFormState = { message: '', success: false, errors: {} };
+const LOCATION_OPTIONS = ["Farm", "Parabadi yard", "Dhoraji yard", "Jalasar yard"];
 
-// Define the shape of the form data state
-type FormDataState = {
-    transportCompanyId: string;
-    vehicleNo: string;
-    capacityTonnes: string;
-    driverName: string;
-    driverMobile: string;
-    destinationCompanyId: string;
-};
+export default function NewShipmentModal({ isOpen, onClose, location, onSuccess }: Props) {
+    // Master Data
+    const [master, setMaster] = useState<{ 
+        seeds: any[], transportCos: any[], destCos: any[], landmarks: any[] 
+    }>({ seeds: [], transportCos: [], destCos: [], landmarks: [] });
+    
+    // Form State
+    const [selectedLocation, setSelectedLocation] = useState(location || "Parabadi yard");
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [loadingData, setLoadingData] = useState(true);
 
-export function NewShipmentModal({
-    isOpen,
-    onClose,
-    transportCompanies,
-    destinationCompanies,
-    onShipmentStarted
-}: NewShipmentModalProps) {
-    const [state, formAction] = useActionState(startNewShipment, initialState);
-    const formRef = useRef<HTMLFormElement>(null);
-    const [formData, setFormData] = useState<FormDataState>({
-        transportCompanyId: '',
-        vehicleNo: '',
-        capacityTonnes: '',
-        driverName: '',
-        driverMobile: '',
-        destinationCompanyId: '',
-    });
+    // Landmark Search
+    const [landmarkSearch, setLandmarkSearch] = useState("");
+    const [showLandmarkList, setShowLandmarkList] = useState(false);
+    const [selectedLandmark, setSelectedLandmark] = useState<{id: number, name: string} | null>(null);
 
-    const TONNES_TO_BAGS_MULTIPLIER = 20;
-    const bagCapacity = React.useMemo(() => {
-        const tonnes = parseFloat(formData.capacityTonnes);
-        return (!isNaN(tonnes) && tonnes > 0) ? Math.floor(tonnes * TONNES_TO_BAGS_MULTIPLIER) : 0;
-    }, [formData.capacityTonnes]);
-
-    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-        setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
-    };
-
-    const handleSelectChange = (name: keyof FormDataState) => (value: string) => {
-        setFormData(prev => ({ ...prev, [name]: value }));
-    };
+    // Seed Selection (Mobile Friendly)
+    const [seedSearch, setSeedSearch] = useState("");
+    const [selectedSeedIds, setSelectedSeedIds] = useState<number[]>([]);
 
     useEffect(() => {
-        if (state.success && state.shipmentId) {
-            onShipmentStarted(state.shipmentId); // Notify parent
-            handleClose(); // Close modal on success
+        if (isOpen) {
+            setLoadingData(true);
+            getShipmentMasterData()
+                .then(setMaster)
+                .finally(() => setLoadingData(false));
+            
+            setSelectedLocation(location || "Parabadi yard");
+            setSelectedLandmark(null);
+            setLandmarkSearch("");
+            setSelectedSeedIds([]);
+            setSeedSearch("");
         }
-        // Keep modal open on error to show message
-    }, [state.success, state.shipmentId]); // Removed onClose, onShipmentStarted from dependencies
+    }, [isOpen, location]);
 
-    const handleClose = () => {
-        formRef.current?.reset();
-        setFormData({ // Reset local form state
-             transportCompanyId: '', vehicleNo: '', capacityTonnes: '',
-             driverName: '', driverMobile: '', destinationCompanyId: '',
-        });
-        // Reset action state? useActionState doesn't have a built-in reset,
-        // but maybe we don't need to explicitly reset it if the component unmounts/remounts.
-        // For now, rely on unmount/remount or manually reset if issues arise.
-        onClose(); // Call parent's close handler
+    const toggleSeed = (id: number) => {
+        setSelectedSeedIds(prev => 
+            prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+        );
     };
 
+    const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        setIsSubmitting(true);
+        const formData = new FormData(e.currentTarget);
 
-    // Prepare options for selects
-    const transportOptions = transportCompanies.map(c => ({ value: String(c.id), label: c.name }));
-    const destinationOptions = destinationCompanies.map(c => ({ value: String(c.id), label: c.name }));
+        // Validation
+        if (selectedSeedIds.length === 0) {
+            toast.error("Please select at least one seed variety.");
+            setIsSubmitting(false);
+            return;
+        }
+        // Manual Append of Array (as JSON string to simplify)
+        formData.append('seedIds', JSON.stringify(selectedSeedIds));
+
+        if (selectedLocation === "Farm" && !selectedLandmark) {
+            toast.error("Please select a Landmark for Farm pickup.");
+            setIsSubmitting(false);
+            return;
+        }
+        if (selectedLocation === "Farm" && selectedLandmark) {
+            formData.append('landmarkId', selectedLandmark.id.toString());
+        }
+
+        const res = await createShipment(formData);
+        if (res.success) {
+            toast.success("Truck registered successfully!");
+            onSuccess();
+            onClose();
+        } else {
+            toast.error(res.message || "Failed.");
+        }
+        setIsSubmitting(false);
+    };
+
+    // Filters
+    const filteredLandmarks = master.landmarks.filter(l => l.name.toLowerCase().includes(landmarkSearch.toLowerCase()));
+    const filteredSeeds = master.seeds.filter(s => s.variety_name.toLowerCase().includes(seedSearch.toLowerCase()));
+
+    if (!isOpen) return null;
 
     return (
-        <Modal isOpen={isOpen} onClose={handleClose} title="Start New Shipment" maxWidth="max-w-lg">
-            <form ref={formRef} action={formAction} className="space-y-5">
-                {/* Input fields adapted from NewShipmentForm.tsx */}
-                <SearchableSelect
-                    id="transportCompanyId"
-                    name="transportCompanyId"
-                    label="Transport Company"
-                    options={transportOptions}
-                    value={formData.transportCompanyId}
-                    onChange={handleSelectChange('transportCompanyId')}
-                />
-                {state.errors?.transportCompanyId && <p className="text-sm text-error -mt-3 px-1">{state.errors.transportCompanyId[0]}</p>}
-
-                <Input
-                    id="vehicleNo"
-                    name="vehicleNo"
-                    label="Vehicle No."
-                    value={formData.vehicleNo}
-                    onChange={handleInputChange}
-                    required
-                    className="uppercase" // Keep uppercase styling
-                    autoCapitalize="characters"
-                />
-                 {state.errors?.vehicleNo && <p className="text-sm text-error -mt-3 px-1">{state.errors.vehicleNo[0]}</p>}
-
-                 <Input
-                    id="driverName"
-                    name="driverName"
-                    label="Driver Name"
-                    value={formData.driverName}
-                    onChange={handleInputChange}
-                    required
-                 />
-                 {state.errors?.driverName && <p className="text-sm text-error -mt-3 px-1">{state.errors.driverName[0]}</p>}
-
-
-                <div className="grid grid-cols-2 gap-4 items-end">
-                    <Input
-                        id="capacityTonnes"
-                        name="capacityTonnes"
-                        label="Capacity (Tonnes)"
-                        type="number"
-                        step="0.1"
-                        min="0"
-                        value={formData.capacityTonnes}
-                        onChange={handleInputChange}
-                        required
-                    />
-                    <div className="bg-secondary-container/30 text-on-secondary-container text-sm font-medium h-[56px] flex items-center justify-center rounded-xl px-3 text-center mb-[2px]">
-                        <Package size={16} className="mr-1.5 opacity-80" /> ~ {bagCapacity} Bags
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+                
+                {/* Header */}
+                <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                    <div>
+                        <h2 className="text-xl font-bold text-slate-800">New Truck</h2>
+                        <p className="text-xs text-slate-500 font-medium">Register for loading</p>
                     </div>
+                    <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
+                        <X className="w-5 h-5 text-slate-500" />
+                    </button>
                 </div>
-                 {state.errors?.capacityTonnes && <p className="text-sm text-error -mt-3 px-1 col-span-2">{state.errors.capacityTonnes[0]}</p>}
 
+                {loadingData ? (
+                    <div className="flex-1 p-10 flex flex-col items-center justify-center text-slate-400">
+                        <LoaderCircle className="w-8 h-8 animate-spin mb-3" />
+                        <p className="text-xs font-bold uppercase tracking-widest">Loading...</p>
+                    </div>
+                ) : (
+                    <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-5 space-y-5">
+                        
+                        {/* 1. Location Section */}
+                        <div className="p-4 bg-blue-50/50 border border-blue-100 rounded-2xl space-y-4">
+                            <div className="space-y-1">
+                                <label className="text-xs font-bold uppercase text-blue-700 flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" /> Pickup Location</label>
+                                <select 
+                                    name="location" 
+                                    value={selectedLocation}
+                                    onChange={(e) => setSelectedLocation(e.target.value)}
+                                    className="w-full p-3 bg-white border border-blue-200 rounded-xl font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500"
+                                >
+                                    {LOCATION_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                </select>
+                            </div>
+                            {selectedLocation === "Farm" && (
+                                <div className="space-y-1 relative">
+                                    <label className="text-xs font-bold uppercase text-blue-700 flex items-center gap-1.5"><Search className="w-3.5 h-3.5" /> Search Landmark</label>
+                                    <div className="relative">
+                                        <input 
+                                            type="text"
+                                            placeholder="Type to search..."
+                                            value={selectedLandmark ? selectedLandmark.name : landmarkSearch}
+                                            onChange={(e) => { setLandmarkSearch(e.target.value); setSelectedLandmark(null); setShowLandmarkList(true); }}
+                                            onFocus={() => setShowLandmarkList(true)}
+                                            className={`w-full p-3 border rounded-xl font-medium outline-none focus:ring-2 focus:ring-blue-500 ${selectedLandmark ? 'bg-blue-100 border-blue-300 text-blue-800' : 'bg-white border-blue-200'}`}
+                                        />
+                                        {(selectedLandmark || landmarkSearch) && (
+                                            <button type="button" onClick={() => { setSelectedLandmark(null); setLandmarkSearch(""); }} className="absolute right-3 top-3 text-slate-400 hover:text-red-500"><X className="w-4 h-4" /></button>
+                                        )}
+                                    </div>
+                                    {showLandmarkList && !selectedLandmark && (
+                                        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto z-50">
+                                            {filteredLandmarks.length > 0 ? filteredLandmarks.map(l => (
+                                                <div key={l.id} onClick={() => { setSelectedLandmark(l); setShowLandmarkList(false); }} className="p-3 hover:bg-blue-50 cursor-pointer text-sm font-medium text-slate-700 border-b border-slate-50 last:border-0">{l.name}</div>
+                                            )) : <div className="p-3 text-xs text-slate-400 text-center">No results</div>}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
 
-                <Input
-                    id="driverMobile"
-                    name="driverMobile"
-                    label="Driver Mobile (Optional)"
-                    type="tel"
-                    inputMode="numeric"
-                    pattern="[0-9]*" // Basic pattern, consider stricter if needed
-                    maxLength={10}
-                    value={formData.driverMobile}
-                    onChange={handleInputChange}
-                />
-                 {state.errors?.driverMobile && <p className="text-sm text-error -mt-3 px-1">{state.errors.driverMobile[0]}</p>}
+                        {/* 2. Basic Info */}
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-1">
+                                <label className="text-xs font-bold uppercase text-slate-500">Driver Name</label>
+                                <input name="driverName" required className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold outline-none focus:ring-2 focus:ring-slate-900" />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-xs font-bold uppercase text-slate-500">Mobile</label>
+                                <input name="driverMobile" required className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold outline-none focus:ring-2 focus:ring-slate-900" />
+                            </div>
+                        </div>
 
-                <SearchableSelect
-                    id="destinationCompanyId"
-                    name="destinationCompanyId"
-                    label="Destination Company"
-                    options={destinationOptions}
-                    value={formData.destinationCompanyId}
-                    onChange={handleSelectChange('destinationCompanyId')}
-                />
-                 {state.errors?.destinationCompanyId && <p className="text-sm text-error -mt-3 px-1">{state.errors.destinationCompanyId[0]}</p>}
+                        <div className="space-y-1">
+                            <label className="text-xs font-bold uppercase text-slate-500">Vehicle Number</label>
+                            <input name="vehicleNo" required placeholder="GJ-03..." className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-black text-xl text-slate-800 outline-none focus:ring-2 focus:ring-slate-900 uppercase placeholder:normal-case" />
+                        </div>
 
+                        {/* 3. Companies */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-1">
+                                <label className="text-xs font-bold uppercase text-slate-500">Transport</label>
+                                <select name="transportId" required className="w-full p-3 bg-white border border-slate-200 rounded-xl font-medium outline-none focus:ring-2 focus:ring-slate-900">
+                                    <option value="">Select...</option>
+                                    {master.transportCos.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                </select>
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-xs font-bold uppercase text-slate-500">Destination</label>
+                                <select name="destId" required className="w-full p-3 bg-white border border-slate-200 rounded-xl font-medium outline-none focus:ring-2 focus:ring-slate-900">
+                                    <option value="">Select...</option>
+                                    {master.destCos.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                </select>
+                            </div>
+                        </div>
 
-                {/* General Form Error */}
-                {state.errors?._form && (
-                    <p className="text-sm text-error text-center mt-4 bg-error-container p-3 rounded-lg">{state.errors._form[0]}</p>
+                        <div className="space-y-1">
+                            <label className="text-xs font-bold uppercase text-slate-500">Capacity (Ton)</label>
+                            <input name="capacity" type="number" step="0.1" required placeholder="20" className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold outline-none focus:ring-2 focus:ring-slate-900" />
+                        </div>
+
+                        {/* 4. MOBILE FRIENDLY SEED SELECTION */}
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold uppercase text-slate-500 flex items-center justify-between">
+                                <span className="flex items-center gap-1.5"><Leaf className="w-3.5 h-3.5" /> Allowed Varieties</span>
+                                <span className="text-slate-400">{selectedSeedIds.length} Selected</span>
+                            </label>
+                            
+                            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 max-h-60 overflow-y-auto">
+                                <input 
+                                    type="text" 
+                                    placeholder="Search varieties..." 
+                                    value={seedSearch}
+                                    onChange={e => setSeedSearch(e.target.value)}
+                                    className="w-full mb-2 p-2 text-sm bg-white border border-slate-200 rounded-lg outline-none focus:border-slate-400"
+                                />
+                                <div className="grid grid-cols-2 gap-2">
+                                    {filteredSeeds.map((s: any) => {
+                                        const isSelected = selectedSeedIds.includes(s.seed_id);
+                                        return (
+                                            <div 
+                                                key={s.seed_id}
+                                                onClick={() => toggleSeed(s.seed_id)}
+                                                className={`p-2 rounded-lg text-sm font-bold border cursor-pointer transition-all flex items-center gap-2
+                                                    ${isSelected ? 'bg-green-100 border-green-300 text-green-800' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'}`}
+                                            >
+                                                <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${isSelected ? 'bg-green-500 border-green-500' : 'border-slate-300'}`}>
+                                                    {isSelected && <Check className="w-3 h-3 text-white" />}
+                                                </div>
+                                                <span className="truncate">{s.variety_name}</span>
+                                            </div>
+                                        );
+                                    })}
+                                    {filteredSeeds.length === 0 && <p className="col-span-2 text-center text-xs text-slate-400 py-2">No varieties found</p>}
+                                </div>
+                            </div>
+                        </div>
+
+                    </form>
                 )}
-                 {/* Success Message (optional, as modal closes) */}
-                 {state.success && (
-                     <p className="text-sm text-green-600 text-center mt-4">{state.message}</p>
-                 )}
 
-                {/* Submit Button */}
-                <div className="pt-4">
-                     <SubmitButton />
+                <div className="p-5 border-t border-slate-100 bg-slate-50">
+                    <button 
+                        onClick={(e) => { const form = e.currentTarget.closest('.bg-white')?.querySelector('form'); form?.requestSubmit(); }}
+                        disabled={isSubmitting || loadingData} 
+                        className="w-full bg-slate-900 text-white py-4 rounded-2xl font-bold text-lg shadow-lg active:scale-95 transition-transform flex items-center justify-center gap-2 disabled:opacity-70"
+                    >
+                        {isSubmitting ? <><LoaderCircle className="w-5 h-5 animate-spin" /> Creating...</> : "Register Truck"}
+                    </button>
                 </div>
-            </form>
-        </Modal>
-    );
-}
-
-// Separate SubmitButton component to use useFormStatus hook
-function SubmitButton() {
-    // const { pending } = useFormStatus(); // Requires React ^18.3 or experimental
-    const pending = false; // Placeholder until useFormStatus is stable or alternative used
-
-    return (
-        <button
-            type="submit"
-            disabled={pending}
-            className="w-full h-[50px] text-base font-medium rounded-full bg-primary text-on-primary shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 disabled:bg-on-surface/20 disabled:text-on-surface/40 disabled:shadow-none disabled:cursor-not-allowed"
-        >
-            {pending ? <LoaderCircle className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
-            {pending ? 'Starting...' : 'Start Shipment'}
-        </button>
+            </div>
+        </div>
     );
 }
