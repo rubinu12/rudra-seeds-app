@@ -1,14 +1,12 @@
+// src/components/admin/WelcomeHeader.tsx
 "use client";
 
-import { useTransition } from 'react';
+import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { 
-  CirclePlus, Database, Edit, Beaker, CheckSquare, 
-  Edit3, FileText, IndianRupee, LoaderCircle, Briefcase, 
-  ChevronRight 
-} from 'lucide-react';
+import { CirclePlus, Database, Edit, Beaker, CheckSquare, Edit3, FileText, IndianRupee, LoaderCircle, Briefcase } from 'lucide-react';
 import { Season } from './Navbar';
 
+// Define the complete props for the component
 type WelcomeHeaderProps = {
   onEnterSampleDataClick: () => void;
   onSetTemporaryPriceClick: () => void;
@@ -16,36 +14,38 @@ type WelcomeHeaderProps = {
   onEditCycleClick: () => void;
   onGenerateShipmentBillClick: () => void; 
   onProcessFarmerPaymentsClick: () => void;
-  onFinanceClick: () => void;
+  onFinanceClick: () => void; // <--- NEW PROP
   activeSeason: Season;
 };
 
-// --- MODERN ACTION TILE COMPONENT ---
-const ActionTile = ({ onClick, Icon, label, colorClass, isPending }: any) => (
-    <button
-        onClick={onClick}
-        disabled={isPending}
-        className="group relative flex items-center gap-4 px-5 py-4 bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-md hover:border-purple-100 transition-all duration-200 active:scale-[0.98] text-left w-full sm:w-auto min-w-[180px]"
-    >
-        {/* Icon Container with Dynamic Color */}
-        <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors duration-200 ${colorClass} group-hover:scale-110`}>
+// Helper component for action buttons (Preserved exactly as is)
+const ActionButton = ({ onClick, Icon, label, bgColor, isPending = false }: {
+    onClick?: () => void,
+    Icon: React.ElementType,
+    label: string,
+    bgColor: string,
+    isPending?: boolean
+}) => (
+    <div className="text-center">
+        <button
+            onClick={onClick}
+            disabled={isPending || !onClick}
+            className={`btn w-16 h-16 ${bgColor} rounded-xl flex items-center justify-center shadow-sm hover:shadow-md transition-shadow disabled:opacity-50 disabled:cursor-wait`}
+        >
             {isPending ? (
-                <LoaderCircle className="w-6 h-6 animate-spin" />
+                <LoaderCircle className="h-8 w-8 animate-spin text-on-primary-container opacity-70" />
             ) : (
-                <Icon className="w-6 h-6" strokeWidth={2} />
+                <Icon className={`h-8 w-8 ${
+                    bgColor.includes('secondary') ? 'text-on-secondary-container' :
+                    bgColor.includes('tertiary') ? 'text-on-tertiary-container' :
+                    'text-on-primary-container'
+                }`} />
             )}
-        </div>
-        
-        {/* Text Label */}
-        <div className="flex-1">
-            <p className="text-sm font-bold text-slate-700 group-hover:text-slate-900 transition-colors">
-                {label}
-            </p>
-            <p className="text-[10px] font-semibold text-slate-400 group-hover:text-purple-500 flex items-center gap-1 mt-0.5 opacity-0 group-hover:opacity-100 transition-all transform translate-x-[-10px] group-hover:translate-x-0">
-                Open <ChevronRight className="w-3 h-3" />
-            </p>
-        </div>
-    </button>
+        </button>
+        <p className="text-xs mt-2 font-medium text-on-surface-variant">
+            {isPending ? 'Loading...' : label}
+        </p>
+    </div>
 );
 
 export default function WelcomeHeader({
@@ -55,96 +55,76 @@ export default function WelcomeHeader({
     onEditCycleClick,
     onGenerateShipmentBillClick,
     onProcessFarmerPaymentsClick,
-    onFinanceClick,
+    onFinanceClick, // <--- Destructured
     activeSeason
 }: WelcomeHeaderProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
   const handleStartCycleClick = () => {
-    startTransition(() => router.push('/admin/cycles/new'));
+    startTransition(() => {
+      router.push('/admin/cycles/new');
+    });
   };
 
   return (
-    <div className="space-y-6">
-      
-      {/* 1. Title Section */}
+    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
       <div>
-        <h2 className="text-3xl font-black text-slate-900 tracking-tight">Harvest Command</h2>
-        <p className="text-slate-500 font-medium mt-1">Manage operations for {activeSeason} Season 2024-25</p>
+        <h2 className="text-3xl font-normal text-on-surface">Welcome Back, Admin!</h2>
+        <p className="text-on-surface-variant">Manage the {activeSeason} phase.</p>
       </div>
-
-      {/* 2. Modern Action Grid */}
-      <div className="flex flex-wrap gap-4">
-        
-        {/* HARVESTING ACTIONS */}
-        {activeSeason === 'Harvesting' && (
-           <>
-             <ActionTile 
-                onClick={onEnterSampleDataClick} 
-                Icon={Beaker} 
-                label="Sample Entry" 
-                colorClass="bg-purple-50 text-purple-600 group-hover:bg-purple-600 group-hover:text-white" 
-             />
-             <ActionTile 
-                onClick={onSetTemporaryPriceClick} 
-                Icon={Edit3} 
-                label="Set Price" 
-                colorClass="bg-amber-50 text-amber-600 group-hover:bg-amber-600 group-hover:text-white" 
-             />
-             <ActionTile 
-                onClick={onVerifyPriceClick} 
-                Icon={CheckSquare} 
-                label="Verify Price" 
-                colorClass="bg-emerald-50 text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white" 
-             />
-             <div className="w-px h-12 bg-slate-200 hidden sm:block self-center mx-2"></div> {/* Divider */}
-             <ActionTile 
-                onClick={onGenerateShipmentBillClick} 
-                Icon={FileText} 
-                label="Shipment Bill" 
-                colorClass="bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white" 
-             />
-             <ActionTile 
-                onClick={onProcessFarmerPaymentsClick} 
-                Icon={IndianRupee} 
-                label="Payments" 
-                colorClass="bg-rose-50 text-rose-600 group-hover:bg-rose-600 group-hover:text-white" 
-             />
-             <ActionTile 
-                onClick={onFinanceClick} 
-                Icon={Briefcase} 
-                label="Finance Hub" 
-                colorClass="bg-slate-100 text-slate-600 group-hover:bg-slate-800 group-hover:text-white" 
-             />
-           </>
-        )}
-
-        {/* SOWING ACTIONS */}
+      <div className="flex items-center space-x-2 sm:space-x-4 flex-wrap gap-y-2">
+        {/* Sowing Buttons */}
         {activeSeason === 'Sowing' && (
           <>
-            <ActionTile
+            <ActionButton
               onClick={handleStartCycleClick}
               Icon={CirclePlus}
               label="Start Cycle"
-              colorClass="bg-green-50 text-green-600 group-hover:bg-green-600 group-hover:text-white"
+              bgColor="bg-primary-container"
               isPending={isPending}
             />
-            <ActionTile
+            <ActionButton
                 onClick={onEditCycleClick}
                 Icon={Edit}
                 label="Edit Cycle"
-                colorClass="bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white"
+                bgColor="bg-secondary-container"
             />
-            <ActionTile 
-                onClick={() => {}} 
-                Icon={Database} 
-                label="Master Data" 
-                colorClass="bg-slate-100 text-slate-600 group-hover:bg-slate-800 group-hover:text-white" 
-            />
+            <ActionButton Icon={Database} label="Master Data" bgColor="bg-surface-container" />
           </>
         )}
+        {/* Harvesting Buttons */}
+        {activeSeason === 'Harvesting' && (
+           <>
+             {/* Core Harvesting Buttons */}
+             <ActionButton onClick={onEnterSampleDataClick} Icon={Beaker} label="Enter Samples" bgColor="bg-secondary-container" />
+             <ActionButton onClick={onSetTemporaryPriceClick} Icon={Edit3} label="Set Temp Price" bgColor="bg-tertiary-container" />
+             <ActionButton onClick={onVerifyPriceClick} Icon={CheckSquare} label="Verify Prices" bgColor="bg-primary-container" />
 
+             {/* Billing & Payments Buttons */}
+             <ActionButton
+                onClick={onGenerateShipmentBillClick}
+                Icon={FileText}
+                label="Shipment Bill"
+                bgColor="bg-primary-container"
+             />
+             <ActionButton
+                onClick={onProcessFarmerPaymentsClick}
+                Icon={IndianRupee}
+                label="Farmer Payments"
+                bgColor="bg-secondary-container"
+             />
+             
+             {/* *** NEW FINANCE BUTTON *** */}
+             <ActionButton
+                onClick={onFinanceClick}
+                Icon={Briefcase}
+                label="Manage Finance"
+                bgColor="bg-tertiary-container"
+             />
+           </>
+        )}
+         {/* Growing phase currently empty */}
       </div>
     </div>
   );

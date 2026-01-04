@@ -1,4 +1,4 @@
-import DashboardController from "@/app/admin-v2/dashboard/DashboardController";
+import DashboardController from "./DashboardController";
 
 export const metadata = {
   title: "Admin Dashboard | RudraSeeds",
@@ -7,7 +7,8 @@ export const metadata = {
 
 export default function AdminDashboardPage() {
   return (
-    // Pass any server-side initial data here if needed in the future
-    <DashboardController />
+    <div className="animate-in fade-in duration-700">
+      <DashboardController />
+    </div>
   );
 }
