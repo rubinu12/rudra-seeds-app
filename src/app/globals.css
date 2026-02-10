@@ -1,0 +1,68 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Roboto", sans-serif;
+
+  /* Radii and Shadows from your original theme */
+  --radius-m3-xlarge: 1.75rem;
+  --radius-m3-large: 1rem;
+  --radius-m3-medium: 0.75rem;
+  --radius-m3-small: 0.5rem;
+  --radius-m3-full: 9999px;
+  --shadow-m3-subtle: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-m3-active: 0 8px 16px -4px rgb(0 0 0 / 0.1), 0 4px 6px -2px rgb(0 0 0 / 0.05);
+
+  /* CORRECTED COLOR DEFINITIONS FOR THE FORM */
+  --color-primary: #6750A4;
+  --color-on-primary: #FFFFFF;
+  --color-primary-container: #EADDFF;
+  --color-on-primary-container: #21005D;
+
+  --color-secondary: #625B71;
+  --color-on-secondary: #FFFFFF;
+  --color-secondary-container: #E8DEF8;
+  --color-on-secondary-container: #1D192B;
+
+  --color-tertiary: #7D5260;
+  --color-on-tertiary: #FFFFFF;
+  --color-tertiary-container: #FFD8E4;
+  --color-on-tertiary-container: #31111D;
+
+  --color-error: #B3261E;
+  --color-on-error: #FFFFFF;
+  --color-error-container: #FFDAD6;
+  --color-on-error-container: #410002;
+
+  --color-surface: #FFFBFE;
+  --color-on-surface: #1C1B1F;
+  --color-surface-variant: #E7E0EC;
+  --color-on-surface-variant: #49454F;
+  --color-outline: #79747E;
+
+  /* These are the crucial variables from v9.html */
+  --color-surface-container: #F3EDF7;
+  --color-input-bg: #E7E0EC;
+}
+
+@keyframes gradient-animation {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+
+body {
+    background: linear-gradient(-45deg, #eaddff, #d1e4ff, #ffd8e4, #e8def8);
+    background-size: 400% 400%;
+    animation: gradient-animation 25s ease infinite;
+}
+
+/* === ADDED CLICK ANIMATION RULE BELOW === */
+.btn {
+  transition: all 0.2s ease-in-out;
+}
+.btn:hover {
+  transform: translateY(-2px); /* Lift button slightly on hover */
+}
+.btn:active {
+  transform: translateY(0px) scale(0.98); /* Return Y position and shrink */
+}
