@@ -1,3 +1,4 @@
+// src/app/admin/finance/FinanceClientView.tsx
 "use client";
 
 import { useState, useMemo } from "react";
@@ -7,13 +8,11 @@ import {
   Tractor, 
   Search, 
   Download, 
-  ArrowUpRight, 
-  ArrowDownLeft,
   Filter,
   TrendingUp,
   AlertCircle,
   CheckCircle2,
-  MoreHorizontal
+  LucideIcon
 } from "lucide-react";
 import FinanceActionModal from "@/src/components/admin/finance/FinanceActionModal";
 import { 
@@ -31,6 +30,8 @@ type Props = {
   modalData: FinanceData;
 };
 
+type TabId = 'WALLET' | 'TRADE' | 'HARVEST';
+
 // --- MAIN COMPONENT ---
 export default function FinanceClientView({ 
   walletData, 
@@ -39,8 +40,14 @@ export default function FinanceClientView({
   modalData 
 }: Props) {
   
-  const [activeTab, setActiveTab] = useState<'WALLET' | 'TRADE' | 'HARVEST'>('WALLET');
+  const [activeTab, setActiveTab] = useState<TabId>('WALLET');
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const tabs: { id: TabId; label: string; icon: LucideIcon }[] = [
+    { id: 'WALLET', label: 'Master Wallet', icon: Wallet },
+    { id: 'TRADE', label: 'Trade Book', icon: Building2 },
+    { id: 'HARVEST', label: 'Harvest Register', icon: Tractor },
+  ];
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -59,11 +66,7 @@ export default function FinanceClientView({
         <div className="flex items-center gap-4">
             {/* TABS */}
             <div className="flex bg-slate-100 p-1.5 rounded-xl border border-slate-200">
-              {[
-                { id: 'WALLET', label: 'Master Wallet', icon: Wallet },
-                { id: 'TRADE', label: 'Trade Book', icon: Building2 },
-                { id: 'HARVEST', label: 'Harvest Register', icon: Tractor },
-              ].map((tab: any) => (
+              {tabs.map((tab) => (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
@@ -551,7 +554,15 @@ function HarvestView({ data }: { data: HarvestMetric[] }) {
 }
 
 // --- HELPER CARD COMPONENT ---
-function MetricCard({ label, value, subValue, icon: Icon, colorClass }: any) {
+type MetricCardProps = {
+    label: string;
+    value: string;
+    subValue?: string;
+    icon: LucideIcon;
+    colorClass: string;
+};
+
+function MetricCard({ label, value, subValue, icon: Icon, colorClass }: MetricCardProps) {
   return (
     <div className={`bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-start justify-between relative overflow-hidden transition-all hover:shadow-md group`}>
       <div className="relative z-10">

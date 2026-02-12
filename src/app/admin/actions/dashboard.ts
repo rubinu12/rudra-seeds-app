@@ -1,3 +1,4 @@
+// src/app/admin/actions/dashboard.ts
 "use server";
 
 import { sql } from '@vercel/postgres';
@@ -21,12 +22,12 @@ export type DashboardStats = {
   };
 };
 
-export async function getDashboardStats(year: number, p0: string): Promise<DashboardStats> {
-  noStore(); // Ensures we don't get cached results from the server
+// FIXED: Removed unused 'p0' parameter
+export async function getDashboardStats(year: number, _season?: string): Promise<DashboardStats> {
+  noStore(); 
   
   try {
-    const [res] = await Promise.all([
-      sql`
+    const res = await sql`
         SELECT
           -- Pipeline Counts
           COUNT(*) FILTER (WHERE status = 'Harvested') as harvested,
@@ -44,8 +45,7 @@ export async function getDashboardStats(year: number, p0: string): Promise<Dashb
           COUNT(*) FILTER (WHERE status = 'Weighed') as ready_to_load
         FROM crop_cycles
         WHERE crop_cycle_year = ${year}
-      `
-    ]);
+      `;
 
     const data = res.rows[0];
 

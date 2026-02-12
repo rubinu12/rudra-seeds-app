@@ -25,9 +25,8 @@ const SampleDataSchema = z.object({
 export async function getCyclesPendingSampleEntry(): Promise<
   CycleForSampleEntry[]
 > {
-  noStore(); // Ensure we don't hit old cache on manual refresh
+  noStore();
   try {
-    // Optimized query selecting only necessary fields
     const result = await sql`
       SELECT
         cc.crop_cycle_id, 
@@ -39,7 +38,7 @@ export async function getCyclesPendingSampleEntry(): Promise<
       JOIN seeds s ON cc.seed_id = s.seed_id
       WHERE cc.status = 'Sample Collected' 
       ORDER BY cc.sample_collection_date ASC
-      LIMIT 100; -- Limit to 100 for maximum speed
+      LIMIT 100;
     `;
     return result.rows as CycleForSampleEntry[];
   } catch (error) {
@@ -84,7 +83,7 @@ export async function submitAdminSampleData(formData: FormData) {
     `;
     revalidatePath("/admin/dashboard");
     return { success: true };
-  } catch (error) {
+  } catch (_error) {
     return { success: false, message: "DB Error." };
   }
 }

@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import UniversalCard from "@/src/components/employee/UniversalCard";
+import UniversalCard, { CardData } from "@/src/components/employee/UniversalCard";
 import {
   getPendingSamples,
   markSampleReceived,
@@ -12,13 +12,17 @@ import {
   ChevronDown,
   ChevronUp,
   AlertCircle,
-  MapPin,
   LoaderCircle,
   Users,
 } from "lucide-react";
 import { toast } from "sonner";
 
-// --- GUJARATI TRANSLATIONS ---
+// --- EXPORTED TYPE (For DashboardClient) ---
+export type SampleTabItem = CardData & {
+    collection_loc: string | null;
+    is_assigned: boolean;
+};
+
 const LOCAL_TXT = {
   search_placeholder: "ખેડૂતનું નામ શોધો...",
   loading: "લોડ થઈ રહ્યું છે...",
@@ -32,13 +36,16 @@ const LOCAL_TXT = {
 export default function SampleTab({
   location,
   selectedVillage,
+  initialData, // Added to accept props if needed, or keep internal load
 }: {
   location: string;
   selectedVillage: string;
+  initialData?: SampleTabItem[];
 }) {
   const router = useRouter();
-  const [data, setData] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Initialize with props if available, else empty array
+  const [data, setData] = useState<SampleTabItem[]>(initialData || []);
+  const [loading, setLoading] = useState(!initialData);
 
   // Search State
   const [localSearch, setLocalSearch] = useState("");
@@ -47,64 +54,61 @@ export default function SampleTab({
   const [isOthersOpen, setIsOthersOpen] = useState(false);
   const [isVillageHiddenOpen, setIsVillageHiddenOpen] = useState(false);
 
-  // Load Data
-  async function load() {
+  // Load Data Function
+  const load = useCallback(async () => {
+    // If we already have initialData, we might not need to fetch immediately, 
+    // but for refresh actions we do.
     setLoading(true);
     try {
-      const res = await getPendingSamples();
-      setData(res);
-    } catch (e) {
+      const res: unknown = await getPendingSamples();
+      setData(res as SampleTabItem[]); 
+    } catch (error) {
       toast.error("Error loading samples");
     } finally {
       setLoading(false);
     }
-  }
-
-  useEffect(() => {
-    load();
   }, []);
 
-  const handleTabAction = async (item: any) => {
+  // Initial Fetch only if no initialData provided
+  useEffect(() => {
+    if (!initialData) {
+      load();
+    }
+  }, [initialData, load]);
+
+  const handleTabAction = async (item: SampleTabItem) => {
     if (item.status === "Harvested") {
       await markSampleReceived(item.crop_cycle_id);
-      load(); // Refresh data
+      load(); 
     } else if (item.status === "Sample Collected") {
       router.push(`/employee/sample/${item.crop_cycle_id}`);
     }
   };
 
   // --- FILTERING LOGIC ---
-
-  // 1. Search Filter
   const searchFiltered = data.filter((item) => {
     if (!localSearch) return true;
     const term = localSearch.toLowerCase();
     return (
-      item.farmer_name?.toLowerCase().includes(term) ||
-      item.village_name?.toLowerCase().includes(term)
+      item.farmer_name.toLowerCase().includes(term) ||
+      (item.village_name || "").toLowerCase().includes(term)
     );
   });
 
-  // 2. Location Matching Helper
   const isLocationMatch = (itemLoc: string | null) => {
     const current = location.toLowerCase().replace(" yard", "").trim();
     const item = (itemLoc || "Farm").toLowerCase().replace(" yard", "").trim();
     return item.includes(current);
   };
 
-  // 3. Grouping Logic
-  // Group A: Matches Location & Assigned (The "Active" Pool)
   const assignedPool = searchFiltered.filter((item) => {
     return isLocationMatch(item.collection_loc) && item.is_assigned;
   });
 
-  // Group B: Wrong Location OR Not Assigned (The "Others" Pool)
   const otherList = searchFiltered.filter((item) => {
     return !(isLocationMatch(item.collection_loc) && item.is_assigned);
   });
 
-  // 4. Village "Soft Filter" Logic
-  // Split the "Active Pool" based on the selected village
   const { displayedList, hiddenVillageList } = useMemo(() => {
     if (selectedVillage === "All") {
       return { displayedList: assignedPool, hiddenVillageList: [] };
@@ -133,8 +137,6 @@ export default function SampleTab({
 
   return (
     <div className="space-y-4 animate-in fade-in duration-300">
-      
-      {/* Search Bar */}
       <div className="relative">
         <Search className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
         <input
@@ -146,7 +148,6 @@ export default function SampleTab({
         />
       </div>
 
-      {/* PRIMARY LIST (Matches Location + Selected Village) */}
       {displayedList.length > 0 ? (
         displayedList.map((item) => (
           <UniversalCard
@@ -166,7 +167,6 @@ export default function SampleTab({
         </div>
       )}
 
-      {/* SOFT FILTER ACCORDION (Different Village, Same Location) */}
       {hiddenVillageList.length > 0 && (
         <div className="pt-2">
           <button
@@ -199,7 +199,6 @@ export default function SampleTab({
         </div>
       )}
 
-      {/* OTHERS ACCORDION (Different Location) */}
       {otherList.length > 0 && (
         <div className="pt-2">
           <button

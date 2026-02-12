@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   Save,
-  Calendar,
   UserCircle,
   Sprout,
   Hash,
@@ -21,7 +20,33 @@ import {
 
 type Params = Promise<{ id: string }>;
 
-// --- 1. CONFIGURATION DATA ---
+// --- TYPES ---
+type DropdownOption = { value: string; label: string };
+
+type CycleData = {
+    farmer_name: string;
+    lot_no: string | null;
+    mobile_number: string | null;
+    village_name: string;
+    goods_collection_method: string | null;
+    color_grade: string | null;
+    sample_non_seed: string | null;
+    sample_moisture: number | null;
+    sample_purity: number | null;
+    dust_percentage: number | null;
+    lab_remarks: string | null;
+    price_per_20kg: number | null;
+};
+
+type DropdownProps = {
+    label: string;
+    name: string;
+    value: string;
+    options: DropdownOption[];
+    onChange: (val: string) => void;
+};
+
+// --- CONFIGURATION ---
 const LOCATION_OPTIONS = [
   { value: "Farm", label: "Farm (ખેડૂત)" },
   { value: "Parabadi yard", label: "Parabadi Yard" },
@@ -41,15 +66,14 @@ const NON_SEED_OPTIONS = [
   { value: "Rare", label: "Rare (ભાગ્યે જ)" },
 ];
 
-// --- 2. REUSABLE CUSTOM DROPDOWN COMPONENT ---
-function CustomDropdown({ label, name, value, options, onChange }: any) {
+// --- DROPDOWN COMPONENT ---
+function CustomDropdown({ label, name, value, options, onChange }: DropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Close when clicking outside
   useEffect(() => {
-    function handleClickOutside(event: any) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsOpen(false);
       }
     }
@@ -58,7 +82,7 @@ function CustomDropdown({ label, name, value, options, onChange }: any) {
   }, [dropdownRef]);
 
   const selectedOption =
-    options.find((opt: any) => opt.value === value) || options[0];
+    options.find((opt) => opt.value === value) || options[0];
 
   return (
     <div className="relative" ref={dropdownRef}>
@@ -66,10 +90,8 @@ function CustomDropdown({ label, name, value, options, onChange }: any) {
         {label}
       </label>
 
-      {/* Hidden Input for Form Submission */}
       <input type="hidden" name={name} value={value} />
 
-      {/* Trigger Button */}
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
@@ -87,10 +109,9 @@ function CustomDropdown({ label, name, value, options, onChange }: any) {
         />
       </button>
 
-      {/* Dropdown Menu */}
       {isOpen && (
         <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-xl border border-slate-100 z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-100">
-          {options.map((opt: any) => (
+          {options.map((opt) => (
             <button
               key={opt.value}
               type="button"
@@ -116,29 +137,26 @@ function CustomDropdown({ label, name, value, options, onChange }: any) {
   );
 }
 
-// --- 3. MAIN PAGE COMPONENT ---
+// --- MAIN PAGE ---
 export default function SampleEntryPage({ params }: { params: Params }) {
   const { id } = use(params);
   const router = useRouter();
 
-  const [data, setData] = useState<any>(null);
+  const [data, setData] = useState<CycleData | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  // Form State (Needed for Custom Dropdowns)
   const [formState, setFormState] = useState({
     location: "Farm",
     color: "",
     nonSeed: "Rare",
   });
 
-  // Load Data
   useEffect(() => {
     getSampleDetails(Number(id)).then((res) => {
       if (res) {
-        setData(res);
-        // Initialize Dropdowns with DB Values
+        setData(res as unknown as CycleData); // Trusting DB return matches our simplified type
         setFormState({
           location: res.goods_collection_method || "Farm",
           color: res.color_grade || "",
@@ -173,10 +191,10 @@ export default function SampleEntryPage({ params }: { params: Params }) {
       </div>
     );
 
-  if (error)
+  if (error || !data)
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-[#FDFCF8] p-5 text-center">
-        <p className="text-red-500 font-bold mb-4">{error}</p>
+        <p className="text-red-500 font-bold mb-4">{error || "Data not found"}</p>
         <button
           onClick={() => router.back()}
           className="px-4 py-2 bg-slate-200 rounded-lg font-bold"
@@ -188,7 +206,6 @@ export default function SampleEntryPage({ params }: { params: Params }) {
 
   return (
     <div className="min-h-screen bg-[#FDFCF8] pb-10 font-sans">
-      {/* HEADER */}
       <div className="bg-white px-4 py-3 flex items-center justify-between shadow-sm sticky top-0 z-20">
         <div className="flex items-center gap-3">
           <button
@@ -207,7 +224,6 @@ export default function SampleEntryPage({ params }: { params: Params }) {
       </div>
 
       <div className="p-4 space-y-4 max-w-lg mx-auto">
-        {/* INFO CARD */}
         <div className="bg-[#FFF5F7] rounded-[24px] p-5 shadow-sm border border-red-50 relative overflow-hidden">
           <div className="grid grid-cols-2 gap-y-4 gap-x-2 relative z-10">
             <div>
@@ -251,7 +267,6 @@ export default function SampleEntryPage({ params }: { params: Params }) {
           </div>
         </div>
 
-        {/* FORM SECTION */}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="bg-white rounded-[24px] p-5 shadow-[0_4px_20px_-10px_rgba(147,51,234,0.15)] border border-purple-100">
             <h2 className="text-sm font-black text-purple-900 mb-5 flex items-center gap-2 border-b border-purple-50 pb-3">
@@ -259,7 +274,6 @@ export default function SampleEntryPage({ params }: { params: Params }) {
             </h2>
 
             <div className="space-y-4">
-              {/* 1. Custom Location Dropdown */}
               <CustomDropdown
                 label="માલ ક્યાં છે? (Collection Location)"
                 name="goods_collection_method"
@@ -270,7 +284,6 @@ export default function SampleEntryPage({ params }: { params: Params }) {
                 }
               />
 
-              {/* Moisture & Purity Grid */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs font-bold text-slate-500 mb-1.5 block">
@@ -280,7 +293,7 @@ export default function SampleEntryPage({ params }: { params: Params }) {
                     name="sample_moisture"
                     type="number"
                     step="0.01"
-                    defaultValue={data.sample_moisture}
+                    defaultValue={data.sample_moisture || ""}
                     placeholder="0.00"
                     className="w-full bg-white border border-slate-200 text-slate-900 text-lg font-bold rounded-2xl px-4 py-3 focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none shadow-sm placeholder:text-slate-300 transition-all"
                     required
@@ -295,7 +308,7 @@ export default function SampleEntryPage({ params }: { params: Params }) {
                     name="sample_purity"
                     type="number"
                     step="0.01"
-                    defaultValue={data.sample_purity}
+                    defaultValue={data.sample_purity || ""}
                     placeholder="0.00"
                     className="w-full bg-white border border-slate-200 text-slate-900 text-lg font-bold rounded-2xl px-4 py-3 focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none shadow-sm placeholder:text-slate-300 transition-all"
                     required
@@ -304,7 +317,6 @@ export default function SampleEntryPage({ params }: { params: Params }) {
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                {/* Dust Percentage */}
                 <div>
                   <label className="text-xs font-bold text-slate-500 mb-1.5 block">
                     કચરો (Dust %)
@@ -313,13 +325,12 @@ export default function SampleEntryPage({ params }: { params: Params }) {
                     name="dust_percentage"
                     type="number"
                     step="0.01"
-                    defaultValue={data.dust_percentage}
+                    defaultValue={data.dust_percentage || ""}
                     placeholder="0.00"
                     className="w-full bg-white border border-slate-200 text-slate-900 text-lg font-bold rounded-2xl px-4 py-3 focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none shadow-sm placeholder:text-slate-300 transition-all"
                   />
                 </div>
 
-                {/* 2. Custom Color Dropdown */}
                 <div>
                   <CustomDropdown
                     label="કલર ગ્રેડ"
@@ -333,7 +344,6 @@ export default function SampleEntryPage({ params }: { params: Params }) {
                 </div>
               </div>
 
-              {/* 3. Custom Non-Seed Dropdown */}
               <CustomDropdown
                 label="બિન-બીજ (Non-Seed)"
                 name="sample_non_seed"
@@ -344,14 +354,13 @@ export default function SampleEntryPage({ params }: { params: Params }) {
                 }
               />
 
-              {/* Remarks */}
               <div>
                 <label className="text-xs font-bold text-slate-500 mb-1.5 block">
                   રિમાર્ક (વૈકલ્પિક)
                 </label>
                 <textarea
                   name="remarks"
-                  defaultValue={data.lab_remarks}
+                  defaultValue={data.lab_remarks || ""}
                   placeholder="Any other notes..."
                   className="w-full bg-white border border-slate-200 text-slate-800 text-sm font-medium rounded-2xl px-4 py-3 focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none resize-none h-24 shadow-sm transition-all"
                 />
@@ -359,7 +368,6 @@ export default function SampleEntryPage({ params }: { params: Params }) {
             </div>
           </div>
 
-          {/* ADMIN PRICE */}
           <div className="bg-white rounded-[24px] p-5 shadow-sm border border-slate-100 opacity-70 grayscale">
             <h2 className="text-sm font-black text-slate-400 mb-3 flex items-center gap-2">
               <UserCircle className="w-4 h-4" /> કાચો ભાવ (Admin Only)
@@ -375,7 +383,6 @@ export default function SampleEntryPage({ params }: { params: Params }) {
             />
           </div>
 
-          {/* SUBMIT */}
           <button
             type="submit"
             disabled={submitting}

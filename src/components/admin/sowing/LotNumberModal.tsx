@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { 
-    Search, Upload, Save, Sprout, FileJson, AlertCircle, Filter 
+    Search, Upload, Save, Sprout, FileJson, AlertCircle, Filter, LoaderCircle 
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { 
@@ -19,10 +19,12 @@ type Props = {
     onClose: () => void;
 };
 
+type SeedOption = { seed_id: number; variety_name: string };
+
 export default function LotNumberModal({ isOpen, onClose }: Props) {
     const [mode, setMode] = useState<'manual' | 'bulk'>('manual');
-    const [seeds, setSeeds] = useState<any[]>([]);
-    const [selectedSeed, setSelectedSeed] = useState<number | "">(""); // The Filter
+    const [seeds, setSeeds] = useState<SeedOption[]>([]);
+    const [selectedSeed, setSelectedSeed] = useState<number | "">(""); 
     
     const [data, setData] = useState<SowingEntry[]>([]);
     const [loading, setLoading] = useState(false);
@@ -30,7 +32,7 @@ export default function LotNumberModal({ isOpen, onClose }: Props) {
     // Load Seeds on Open
     useEffect(() => {
         if (isOpen) {
-            getLotMasterData().then(res => setSeeds(res.seeds));
+            getLotMasterData().then(res => setSeeds(res.seeds as SeedOption[]));
         }
     }, [isOpen]);
 
@@ -44,8 +46,8 @@ export default function LotNumberModal({ isOpen, onClose }: Props) {
     }, [selectedSeed]);
 
     const loadData = async () => {
+        if(!selectedSeed) return;
         setLoading(true);
-        // Pass the selected seed to filter the data
         const res = await getSowingData(Number(selectedSeed));
         setData(res);
         setLoading(false);
@@ -54,7 +56,6 @@ export default function LotNumberModal({ isOpen, onClose }: Props) {
     return (
         <Modal isOpen={isOpen} onClose={onClose} title="Manage Lot Numbers">
             
-            {/* 1. SEED FILTER (The Brain) */}
             <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-4">
                 <label className="text-xs font-bold text-slate-500 uppercase mb-1 flex items-center gap-1">
                     <Filter className="w-3 h-3" /> Filter by Seed Variety (Required)
@@ -65,13 +66,12 @@ export default function LotNumberModal({ isOpen, onClose }: Props) {
                     className="w-full p-2.5 rounded-lg border border-slate-300 font-bold text-slate-800 focus:ring-2 focus:ring-black outline-none"
                 >
                     <option value="">-- Select Seed to Begin --</option>
-                    {seeds.map((s: any) => (
+                    {seeds.map((s) => (
                         <option key={s.seed_id} value={s.seed_id}>{s.variety_name}</option>
                     ))}
                 </select>
             </div>
 
-            {/* 2. MODE TABS */}
             <div className={`flex gap-2 mb-4 border-b border-slate-100 pb-2 transition-opacity ${!selectedSeed ? 'opacity-50 pointer-events-none' : ''}`}>
                 <button 
                     onClick={() => setMode('manual')}
@@ -87,7 +87,6 @@ export default function LotNumberModal({ isOpen, onClose }: Props) {
                 </button>
             </div>
 
-            {/* 3. CONTENT AREA */}
             <div className="h-[55vh] overflow-hidden relative">
                 {!selectedSeed ? (
                     <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 bg-white/50 backdrop-blur-sm z-10">
@@ -97,13 +96,12 @@ export default function LotNumberModal({ isOpen, onClose }: Props) {
                 ) : null}
 
                 {mode === 'manual' ? (
-                    <ManualTab data={data} refresh={loadData} loading={loading} />
+                    <ManualTab data={data} loading={loading} />
                 ) : (
                     <BulkTab 
                         seedId={Number(selectedSeed)} 
                         seedName={seeds.find(s => s.seed_id === selectedSeed)?.variety_name || ""}
                         refresh={loadData} 
-                        onClose={onClose} 
                     />
                 )}
             </div>
@@ -111,8 +109,9 @@ export default function LotNumberModal({ isOpen, onClose }: Props) {
     );
 }
 
-// --- SUB-COMPONENT: MANUAL TAB ---
-function ManualTab({ data, refresh, loading }: { data: SowingEntry[], refresh: () => void, loading: boolean }) {
+// --- SUB COMPONENTS ---
+
+function ManualTab({ data, loading }: { data: SowingEntry[], loading: boolean }) {
     const [search, setSearch] = useState("");
     
     const filtered = data.filter(d => 
@@ -132,9 +131,12 @@ function ManualTab({ data, refresh, loading }: { data: SowingEntry[], refresh: (
                 />
             </div>
 
-            <div className="flex-1 overflow-y-auto pr-1 space-y-2">
+            <div className="flex-1 overflow-y-auto pr-1 space-y-2 custom-scrollbar">
                 {loading ? (
-                    <div className="text-center py-10 text-slate-400">Loading...</div>
+                    <div className="text-center py-10 text-slate-400 flex flex-col items-center gap-2">
+                        <LoaderCircle className="w-6 h-6 animate-spin" />
+                        Loading Farmers...
+                    </div>
                 ) : filtered.length === 0 ? (
                     <div className="text-center py-10 text-slate-400">No farmers found for this seed</div>
                 ) : (
@@ -168,14 +170,18 @@ function LotRow({ item }: { item: SowingEntry }) {
         <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100 group hover:border-slate-300 transition-all">
             <div className="flex-1 min-w-0">
                 <p className="font-bold text-slate-800 text-sm truncate">{item.farmer_name}</p>
-                <p className="text-xs text-slate-500 truncate">{item.village_name}</p>
+                <div className="flex gap-2 text-xs text-slate-500 truncate">
+                    <span>{item.village_name}</span>
+                    <span>•</span>
+                    <span>Sown: {item.sowing_date}</span>
+                </div>
             </div>
             <div className="flex items-center gap-2">
                 <input 
                     value={val}
                     onChange={e => { setVal(e.target.value); setIsDirty(true); }}
                     placeholder="LOT NO"
-                    className={`w-24 px-2 py-1.5 rounded-lg border text-sm font-bold outline-none focus:ring-2 uppercase transition-all
+                    className={`w-28 px-2 py-1.5 rounded-lg border text-sm font-bold outline-none focus:ring-2 uppercase transition-all
                         ${val ? 'bg-white border-slate-200' : 'bg-yellow-50 border-yellow-200 placeholder:text-yellow-400'}
                     `}
                 />
@@ -185,7 +191,7 @@ function LotRow({ item }: { item: SowingEntry }) {
                         disabled={saving}
                         className="p-1.5 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors"
                     >
-                        {saving ? <span className="w-4 h-4 block rounded-full border-2 border-white/30 border-t-white animate-spin" /> : <Save className="w-4 h-4" />}
+                        {saving ? <LoaderCircle className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                     </button>
                 )}
             </div>
@@ -193,20 +199,19 @@ function LotRow({ item }: { item: SowingEntry }) {
     );
 }
 
-// --- SUB-COMPONENT: BULK TAB ---
-function BulkTab({ seedId, seedName, refresh, onClose }: { seedId: number, seedName: string, refresh: () => void, onClose: () => void }) {
+function BulkTab({ seedId, seedName, refresh }: { seedId: number, seedName: string, refresh: () => void }) {
     const [json, setJson] = useState("");
     const [loading, setLoading] = useState(false);
 
     const handleImport = async () => {
         if (!json.trim()) return;
         setLoading(true);
-        // CRITICAL: We pass the seedId to ensure we only update farmers growing THIS seed
         const res = await bulkImportLotNumbers(json, seedId);
         setLoading(false);
         
         if (res.success) {
             toast.success(res.message);
+            setJson(""); // Clear on success
             refresh();
         } else {
             toast.error(res.message);
@@ -222,8 +227,8 @@ function BulkTab({ seedId, seedName, refresh, onClose }: { seedId: number, seedN
                         <p className="font-bold">Bulk Import for <span className="underline">{seedName}</span>:</p>
                         <ul className="list-disc pl-4 space-y-1 text-xs opacity-80">
                             <li>This will only update farmers who are growing <b>{seedName}</b>.</li>
-                            <li>Upload PDF to AI → Ask for JSON Array.</li>
-                            <li>Format: <code className="bg-white px-1 rounded border border-blue-200">[ &#123; "name": "Ramesh", "lot": "L-101" &#125; ]</code></li>
+                            <li>Upload PDF to AI &rarr; Ask for JSON Array.</li>
+                            <li>Format: <code className="bg-white px-1 rounded border border-blue-200">[ &#123; &quot;name&quot;: &quot;Ramesh&quot;, &quot;lot&quot;: &quot;L-101&quot; &#125; ]</code></li>
                         </ul>
                     </div>
                 </div>

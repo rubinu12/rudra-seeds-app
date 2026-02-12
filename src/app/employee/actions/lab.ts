@@ -2,7 +2,7 @@
 
 import { sql } from "@vercel/postgres";
 import { revalidatePath } from "next/cache";
-import { auth } from "@/auth"; // Security
+import { auth } from "@/auth";
 
 export async function getSampleDetails(cycleId: number) {
   console.log("🔍 Fetching Cycle ID:", cycleId);
@@ -37,20 +37,20 @@ export async function getSampleDetails(cycleId: number) {
         month: "short",
         year: "numeric",
       });
-    } catch (e) {
+    } catch (_e) {
       data.formatted_date = "N/A";
     }
 
     return data;
-  } catch (e: any) {
-    console.error("Database Error:", e.message);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Unknown DB Error";
+    console.error("Database Error:", message);
     return null;
   }
 }
 
 export async function submitLabData(cycleId: number, formData: FormData) {
   try {
-    // 1. Security Check
     const session = await auth();
     const userId = session?.user?.id ? Number(session.user.id) : null;
 
@@ -66,7 +66,6 @@ export async function submitLabData(cycleId: number, formData: FormData) {
     const remarks = formData.get("remarks");
     const collection_method = formData.get("goods_collection_method");
 
-    // 2. Update & Track
     await sql`
             UPDATE crop_cycles 
             SET 
@@ -80,14 +79,15 @@ export async function submitLabData(cycleId: number, formData: FormData) {
                 
                 status = 'Sampled', 
                 sampling_date = NOW(),
-                sampled_by = ${userId} -- Tracking the Lab Tech
+                sampled_by = ${userId}
             WHERE crop_cycle_id = ${cycleId}
         `;
 
     revalidatePath("/employee/dashboard");
     return { success: true };
-  } catch (e: any) {
-    console.error("Submit Error:", e.message);
-    return { success: false, message: e.message };
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Submit failed";
+    console.error("Submit Error:", message);
+    return { success: false, message };
   }
 }

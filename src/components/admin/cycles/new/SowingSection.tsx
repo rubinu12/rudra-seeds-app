@@ -1,14 +1,26 @@
-// components/admin/cycles/new/SowingSection.tsx
 "use client";
+
 import React from "react";
 import { Input } from "@/src/components/ui/FormInputs";
 import SearchableSelect from "@/src/components/ui/SearchableSelect";
 import { CheckCircle2, Circle, Sprout } from "lucide-react";
 
+// Updated Type Definition including lot_no
+export type CycleData = {
+  landmarkId: string;
+  seedId: string;
+  bags: number;
+  date: string;
+  goods_collection_method: string;
+  paymentChoice: string;
+  amountPaid: number;
+  lot_no: string; // New Field
+};
+
 type Option = { value: string; label: string };
 
 type Props = {
-  cycleState: [any, Function];
+  cycleState: [CycleData, React.Dispatch<React.SetStateAction<CycleData>>];
   landmarkOptions: Option[];
   seedVarietyOptions: Option[];
 };
@@ -20,19 +32,20 @@ export const SowingSection = ({
 }: Props) => {
   const [cycleData, setCycleData] = cycleState;
 
-  const handleValueChange = (e: React.ChangeEvent<any>) => {
+  const handleValueChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type } = e.target;
-    setCycleData((prev: any) => ({
+    
+    // Explicit type for prev to avoid errors
+    setCycleData((prev: CycleData) => ({
       ...prev,
       [name]: type === "number" ? Number(value) : value,
     }));
   };
 
   const handleSelectChange = (name: string) => (value: string) => {
-    setCycleData((prev: any) => ({ ...prev, [name]: value }));
+    setCycleData((prev: CycleData) => ({ ...prev, [name]: value }));
   };
 
-  // Exact text options as requested
   const collectionOptions = [
     { value: "Farm", label: "Farm" },
     { value: "Parabadi yard", label: "Parabadi yard" },
@@ -40,7 +53,6 @@ export const SowingSection = ({
     { value: "Jalansar yard", label: "Jalansar yard" },
   ];
 
-  // --- Custom Radio Item ---
   const StyledRadio = ({ value, label }: { value: string; label: string }) => {
     const isSelected = cycleData.goods_collection_method === value;
     return (
@@ -49,8 +61,8 @@ export const SowingSection = ({
                 relative flex items-center p-3 rounded-xl border cursor-pointer transition-all duration-200
                 ${
                   isSelected
-                    ? "bg-primary/10 border-primary" // Selected: Background + Border
-                    : "border-outline/20 hover:bg-surface-container-high" // Unselected
+                    ? "bg-primary/10 border-primary"
+                    : "border-outline/20 hover:bg-surface-container-high"
                 }
             `}
       >
@@ -62,8 +74,6 @@ export const SowingSection = ({
           onChange={handleValueChange}
           className="sr-only"
         />
-
-        {/* Tick Icon if selected, Empty Circle if not */}
         <div className="mr-3">
           {isSelected ? (
             <CheckCircle2 className="w-5 h-5 text-primary fill-primary/10" />
@@ -71,7 +81,6 @@ export const SowingSection = ({
             <Circle className="w-5 h-5 text-on-surface-variant/40" />
           )}
         </div>
-
         <span
           className={`font-medium ${isSelected ? "text-primary" : "text-on-surface"}`}
         >
@@ -101,6 +110,24 @@ export const SowingSection = ({
           value={cycleData.landmarkId}
           onChange={handleSelectChange("landmarkId")}
         />
+
+        {/* --- NEW LOT NUMBER FIELD --- */}
+        <div className="relative">
+             <Input
+                type="text"
+                id="lot_no"
+                name="lot_no"
+                label="Lot Number (Optional)"
+                value={cycleData.lot_no}
+                onChange={handleValueChange}
+                className="uppercase placeholder:normal-case"
+                placeholder="e.g. L-101"
+              />
+              <p className="text-[10px] text-on-surface-variant/60 mt-1 ml-1">
+                  Leave blank if you want to assign later.
+              </p>
+        </div>
+        
         <SearchableSelect
           id="seedId"
           name="seedId"
@@ -131,7 +158,6 @@ export const SowingSection = ({
           />
         </div>
 
-        {/* --- Goods Collection Method (Vertical List) --- */}
         <div>
           <p className="text-sm font-medium text-on-surface-variant mb-3 px-1">
             Goods Collection Method

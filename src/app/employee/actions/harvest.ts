@@ -2,7 +2,7 @@
 
 import { sql } from "@vercel/postgres";
 import { revalidatePath } from "next/cache";
-import { auth } from "@/auth"; // Security
+import { auth } from "@/auth";
 
 export async function markAsHarvested(
   cycleId: number,
@@ -26,14 +26,15 @@ export async function markAsHarvested(
                 status = 'Harvested', 
                 harvesting_date = NOW(),
                 goods_collection_method = ${collectionLocation},
-                harvested_by = ${userId} -- Tracking
+                harvested_by = ${userId}
             WHERE crop_cycle_id = ${cycleId}
         `;
 
     revalidatePath("/employee/dashboard");
     return { success: true, message: "Marked as Harvested" };
-  } catch (e: any) {
-    console.error("Harvest Action Failed:", e.message);
-    return { success: false, message: e.message };
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    console.error("Harvest Action Failed:", message);
+    return { success: false, message };
   }
 }

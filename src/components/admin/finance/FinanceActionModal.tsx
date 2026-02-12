@@ -1,3 +1,4 @@
+// src/components/admin/finance/FinanceActionModal.tsx
 "use client";
 
 import { Fragment, useState, useEffect } from "react";
@@ -11,7 +12,8 @@ import {
   AlertCircle, 
   Search,
   RefreshCw,
-  Settings
+  Settings,
+  AlertTriangle // Added for the warning icon
 } from "lucide-react";
 import { 
   adjustBalance, 
@@ -108,7 +110,6 @@ export default function FinanceActionModal({ isOpen, onClose, data: serverData }
         if (res.success) {
             toast.success(`Cleared: ₹${cheque.amount.toLocaleString()}`);
             // 3. Background Sync (Optional, but good for consistency)
-            // We don't await this to keep UI snappy
             refreshModalData().then(setLocalData); 
         } else {
             throw new Error("Failed");
@@ -132,11 +133,20 @@ export default function FinanceActionModal({ isOpen, onClose, data: serverData }
      setIsSubmitting(false);
   };
 
-  // --- UI HELPERS ---
+  // --- UI HELPERS & CALCULATIONS ---
+  
   const filteredCheques = localData.debtCheques.filter(c => 
      c.farmer_name.toLowerCase().includes(searchCheque.toLowerCase()) || 
      c.cheque_number.includes(searchCheque)
   );
+
+  // NEW: Calculate Today's Immediate Cash Requirement (Past + Today Due Dates)
+  const todaysCashRequired = localData.debtCheques
+    .filter(c => new Date(c.due_date) <= new Date()) // Due now or in past
+    .reduce((sum, c) => sum + c.amount, 0);
+
+  // Is there a crunch? (Required > In Hand)
+  const isCashCrunch = todaysCashRequired > localData.balance;
 
   return (
     <Transition appear show={isOpen} as={Fragment}>
@@ -176,10 +186,24 @@ export default function FinanceActionModal({ isOpen, onClose, data: serverData }
                         <p className="text-slate-400 text-sm mt-1">Manage Ledger & Clearances</p>
                     </div>
                     
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-6">
+                        
+                        {/* NEW METRIC: Today's Requirement */}
+                        {todaysCashRequired > 0 && (
+                            <div className="text-right border-r border-slate-700 pr-6">
+                                <div className="flex items-center justify-end gap-1.5 text-xs font-bold text-rose-400 uppercase tracking-wider mb-0.5">
+                                    <AlertTriangle className="w-3.5 h-3.5" />
+                                    Required Today
+                                </div>
+                                <div className="text-2xl font-black tracking-tight text-white">
+                                    ₹{todaysCashRequired.toLocaleString('en-IN')}
+                                </div>
+                            </div>
+                        )}
+
                         {/* Live Balance Card */}
                         <div className="text-right">
-                             <div className="flex items-center justify-end gap-2 text-xs font-bold text-slate-400 uppercase tracking-wider mb-0.5">
+                             <div className="flex items-center justify-end gap-2 text-xs font-bold text-emerald-400 uppercase tracking-wider mb-0.5">
                                  Cash In Hand
                                  <button onClick={() => setIsAdjusting(!isAdjusting)} className="hover:text-white transition-colors">
                                      <Settings className="w-3.5 h-3.5" />
@@ -255,6 +279,9 @@ export default function FinanceActionModal({ isOpen, onClose, data: serverData }
                             <span className="text-xl font-black text-slate-800 mt-1">
                                 ₹{localData.totalDebt.toLocaleString()}
                             </span>
+                            <span className="text-[10px] text-slate-400 font-medium">
+                                Total Future Liability
+                            </span>
                         </button>
 
                         <button
@@ -293,10 +320,12 @@ export default function FinanceActionModal({ isOpen, onClose, data: serverData }
                                          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
                                              Pending Clearances ({filteredCheques.length})
                                          </span>
-                                         {localData.balance < localData.totalDebt && (
-                                             <span className="flex items-center gap-1 text-[10px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full">
-                                                 <AlertCircle className="w-3 h-3" />
-                                                 Shortage: ₹{(localData.totalDebt - localData.balance).toLocaleString()}
+                                         
+                                         {/* SHORTAGE ALERT */}
+                                         {isCashCrunch && (
+                                             <span className="flex items-center gap-1.5 text-xs font-bold text-rose-600 bg-rose-50 px-3 py-1 rounded-full border border-rose-100 animate-pulse">
+                                                 <AlertCircle className="w-3.5 h-3.5" />
+                                                 CRITICAL: Short by ₹{(todaysCashRequired - localData.balance).toLocaleString()}
                                              </span>
                                          )}
                                     </div>
@@ -304,38 +333,44 @@ export default function FinanceActionModal({ isOpen, onClose, data: serverData }
 
                                 {/* List */}
                                 <div className="space-y-2">
-                                    {filteredCheques.length > 0 ? filteredCheques.map((cheque) => (
-                                        <div 
-                                            key={`${cheque.cycle_id}-${cheque.index}`}
-                                            className="group flex items-center justify-between p-4 rounded-xl border border-slate-100 hover:border-slate-300 hover:shadow-md transition-all bg-white"
-                                        >
-                                            <div>
-                                                <h4 className="font-bold text-slate-800 text-sm">{cheque.farmer_name}</h4>
-                                                <div className="flex gap-3 text-xs text-slate-500 mt-1">
-                                                    <span className="font-mono bg-slate-100 px-1.5 py-0.5 rounded">#{cheque.cheque_number}</span>
-                                                    <span className={`${new Date(cheque.due_date) <= new Date() ? 'text-rose-600 font-bold' : ''}`}>
-                                                        Due: {new Date(cheque.due_date).toLocaleDateString('en-IN')}
-                                                    </span>
+                                    {filteredCheques.length > 0 ? filteredCheques.map((cheque) => {
+                                        const isDue = new Date(cheque.due_date) <= new Date();
+                                        return (
+                                            <div 
+                                                key={`${cheque.cycle_id}-${cheque.index}`}
+                                                className={`group flex items-center justify-between p-4 rounded-xl border transition-all bg-white
+                                                    ${isDue ? 'border-rose-100 shadow-sm' : 'border-slate-100 hover:border-slate-300'}
+                                                `}
+                                            >
+                                                <div>
+                                                    <h4 className="font-bold text-slate-800 text-sm">{cheque.farmer_name}</h4>
+                                                    <div className="flex gap-3 text-xs text-slate-500 mt-1">
+                                                        <span className="font-mono bg-slate-100 px-1.5 py-0.5 rounded">#{cheque.cheque_number}</span>
+                                                        <span className={`${isDue ? 'text-rose-600 font-bold flex items-center gap-1' : ''}`}>
+                                                            {isDue && <AlertCircle className="w-3 h-3" />}
+                                                            Due: {new Date(cheque.due_date).toLocaleDateString('en-IN')}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <div className="text-right flex items-center gap-4">
+                                                    <div className={`font-black text-lg ${isDue ? 'text-rose-600' : 'text-slate-800'}`}>
+                                                        ₹{cheque.amount.toLocaleString()}
+                                                    </div>
+                                                    <button
+                                                        onClick={() => handleClearCheque(cheque)}
+                                                        disabled={localData.balance < cheque.amount}
+                                                        className={`px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-sm ${
+                                                            localData.balance < cheque.amount
+                                                                ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+                                                                : "bg-slate-900 text-white hover:bg-emerald-600 hover:shadow-emerald-200"
+                                                        }`}
+                                                    >
+                                                        {localData.balance < cheque.amount ? 'No Cash' : 'Clear Now'}
+                                                    </button>
                                                 </div>
                                             </div>
-                                            <div className="text-right flex items-center gap-4">
-                                                <div className="font-black text-slate-800 text-lg">
-                                                    ₹{cheque.amount.toLocaleString()}
-                                                </div>
-                                                <button
-                                                    onClick={() => handleClearCheque(cheque)}
-                                                    disabled={localData.balance < cheque.amount}
-                                                    className={`px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-sm ${
-                                                        localData.balance < cheque.amount
-                                                            ? "bg-slate-100 text-slate-400 cursor-not-allowed"
-                                                            : "bg-slate-900 text-white hover:bg-emerald-600 hover:shadow-emerald-200"
-                                                    }`}
-                                                >
-                                                    {localData.balance < cheque.amount ? 'No Cash' : 'Clear Now'}
-                                                </button>
-                                            </div>
-                                        </div>
-                                    )) : (
+                                        );
+                                    }) : (
                                         <div className="h-64 flex flex-col items-center justify-center text-slate-300">
                                             <CheckCircle2 className="w-16 h-16 mb-4 opacity-20" />
                                             <p className="font-medium">All caught up! No pending cheques.</p>

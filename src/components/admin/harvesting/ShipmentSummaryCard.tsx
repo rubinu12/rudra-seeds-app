@@ -1,17 +1,14 @@
-// components/admin/harvesting/ShipmentSummaryCard.tsx
 "use client";
 
 import { useState } from "react";
-import { ShipmentSummaryData, ShipmentSummaryItem } from "@/src/lib/admin-data"; // Import the types
+import { ShipmentSummaryData } from "@/src/lib/admin-data"; 
 import {
   ChevronLeft,
   ChevronRight,
   Truck,
-  IndianRupee,
-  Banknote,
   ListChecks,
 } from "lucide-react";
-import Link from "next/link"; // Assuming you'll link the verification button later
+import Link from "next/link"; 
 
 type Props = {
   data: ShipmentSummaryData;
@@ -62,7 +59,6 @@ export default function ShipmentSummaryCard({ data }: Props) {
           <Truck className="w-6 h-6 text-primary flex-shrink-0" />
         </div>
 
-        {/* Shipment Carousel Section */}
         {currentShipment ? (
           <div className="relative mb-4">
             <div className="text-center p-4 bg-surface rounded-lg border border-outline/20">
@@ -105,8 +101,6 @@ export default function ShipmentSummaryCard({ data }: Props) {
         )}
       </div>
 
-      {/* Cheque Verification Section */}
-      {/* TODO: Replace '#' with the actual link to the verification page */}
       <Link href="#" className="w-full">
         <button className="w-full flex items-center justify-center gap-2 h-12 rounded-full bg-secondary-container text-on-secondary-container hover:bg-secondary-container/80 transition-colors text-sm font-medium">
           <ListChecks className="w-5 h-5" />

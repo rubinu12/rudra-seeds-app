@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import DashboardController from "./DashboardController";
 
 export const metadata = {

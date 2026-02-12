@@ -7,13 +7,12 @@ export type MasterDataItem = {
     is_active: boolean;
 };
 
-// Updated Type for Seeds to include Company Name
 export type SeedVarietySetting = {
     id: number;
     name: string;
     crop_type: string;
     company_id: number;     
-    company_name: string;   // Fetched via JOIN
+    company_name: string;
     color_code: string;
     is_active: boolean;
 };
@@ -34,6 +33,30 @@ export type EmployeeSetting = {
     assigned_seeds: number[]; 
     is_active: boolean;
 };
+
+// --- INTERFACES FOR DB ROWS (Prevents 'any') ---
+interface DbAssignmentRow {
+    user_id: number;
+    seed_id: number;
+}
+
+interface DbUserRow {
+    id: number;
+    name: string;
+    mobile: string;
+    role: string;
+    is_active: boolean;
+}
+
+interface DbSeedRow {
+    id: number;
+    name: string;
+    crop_type: string;
+    company_id: number;
+    company_name: string;
+    color_code: string | null;
+    is_active: boolean;
+}
 
 // --- FETCHERS ---
 
@@ -68,7 +91,6 @@ export async function getSettingsDestinationCompanies(): Promise<MasterDataItem[
     return rows as MasterDataItem[];
 }
 
-// *** UPDATED: JOIN to fetch company name for display ***
 export async function getSettingsSeedVarieties(): Promise<SeedVarietySetting[]> {
     const { rows } = await sql`
         SELECT 
@@ -83,7 +105,14 @@ export async function getSettingsSeedVarieties(): Promise<SeedVarietySetting[]> 
         LEFT JOIN destination_companies d ON s.dest_company_id = d.dest_company_id
         ORDER BY s.variety_name;
     `;
-    return rows.map(r => ({ ...r, color_code: r.color_code || '#2563eb' })) as SeedVarietySetting[];
+    
+    // Explicitly cast rows to DbSeedRow to avoid implicit any map
+    const seeds = rows as unknown as DbSeedRow[];
+    
+    return seeds.map(r => ({ 
+        ...r, 
+        color_code: r.color_code || '#2563eb' 
+    }));
 }
 
 export async function getSettingsShipmentCompanies(): Promise<ShipmentCompanySetting[]> {
@@ -98,21 +127,24 @@ export async function getSettingsShipmentCompanies(): Promise<ShipmentCompanySet
 export async function getSettingsEmployees(): Promise<EmployeeSetting[]> {
     try {
         const usersResult = await sql`
-            SELECT user_id as id, name, mobile_number as mobile, role 
+            SELECT user_id as id, name, mobile_number as mobile, role, is_active 
             FROM users 
             WHERE role != 'admin' 
             ORDER BY name;
         `;
 
-        const assignmentsResult = await sql`SELECT * FROM employee_assignments`;
+        const assignmentsResult = await sql`SELECT user_id, seed_id FROM employee_assignments`;
         
-        return usersResult.rows.map(user => {
-            const userAssignments = assignmentsResult.rows
+        const users = usersResult.rows as unknown as DbUserRow[];
+        const assignments = assignmentsResult.rows as unknown as DbAssignmentRow[];
+        
+        return users.map(user => {
+            const userAssignments = assignments
                 .filter(a => a.user_id === user.id)
                 .map(a => a.seed_id);
             
             return { ...user, assigned_seeds: userAssignments };
-        }) as EmployeeSetting[];
+        });
     } catch (e) {
         console.error("Failed to fetch employees", e);
         return [];

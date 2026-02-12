@@ -1,15 +1,12 @@
-// components/ui/FloatingLabelInput.tsx
+// src/components/ui/FloatingLabelInput.tsx
 import React from 'react';
 
-// Define the props for the component
-type FloatingLabelInputProps = {
+type FloatingLabelInputProps = React.InputHTMLAttributes<HTMLInputElement | HTMLTextAreaElement> & {
   id: string;
   name: string;
   label: string;
-  type?: 'text' | 'tel' | 'number' | 'date';
   as?: 'input' | 'textarea';
-  className?: string;
-  [x: string]: any; // Allow for other props like defaultValue, onChange, etc.
+  rows?: number;
 };
 
 export default function FloatingLabelInput({
@@ -21,20 +18,29 @@ export default function FloatingLabelInput({
   className = '',
   ...props
 }: FloatingLabelInputProps) {
-  const commonProps = {
-    id,
-    name,
-    className: `peer block w-full bg-transparent pt-6 pb-2 px-4 text-on-surface outline-none focus:ring-0`,
-    placeholder: ' ', // The space is crucial for the :placeholder-shown selector to work
-    ...props,
-  };
+  
+  const baseClass = `peer block w-full bg-transparent pt-6 pb-2 px-4 text-on-surface outline-none focus:ring-0 ${className}`;
 
   return (
     <div className={`relative rounded-t-lg bg-input-bg/50 border-b-2 border-outline focus-within:border-primary ${className}`}>
       {as === 'textarea' ? (
-        <textarea {...commonProps} rows={props.rows || 3}></textarea>
+        <textarea 
+            id={id}
+            name={name}
+            className={baseClass}
+            placeholder=" "
+            rows={props.rows || 3}
+            {...(props as React.TextareaHTMLAttributes<HTMLTextAreaElement>)}
+        />
       ) : (
-        <input type={type} {...commonProps} />
+        <input 
+            id={id}
+            name={name}
+            type={type}
+            className={baseClass}
+            placeholder=" "
+            {...(props as React.InputHTMLAttributes<HTMLInputElement>)}
+        />
       )}
       <label
         htmlFor={id}

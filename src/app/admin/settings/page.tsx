@@ -1,4 +1,5 @@
 // app/admin/settings/page.tsx
+export const dynamic = 'force-dynamic';
 import {
     getEmployeeMode,
     getAdminDefaultSeason,

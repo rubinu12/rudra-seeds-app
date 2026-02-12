@@ -1,8 +1,7 @@
-// lib/growing-data.ts
+// src/lib/growing-data.ts
 import { sql } from '@vercel/postgres';
 import { CropCycleForEmployee, CycleForVisit, FarmerByLandmark } from './definitions';
 
-// Define a type for the filters for the new universal function
 export type CycleFilters = {
   year?: number;
   query?: string;
@@ -12,13 +11,9 @@ export type CycleFilters = {
   excludeCycleId?: number;
 };
 
-/**
- * NEW UNIVERSAL FUNCTION: Fetches a list of crop cycles based on a variety of filters.
- */
 export async function getCycles(filters: CycleFilters): Promise<CropCycleForEmployee[]> {
     const { year = new Date().getFullYear(), query, landmarkId, excludeCycleId } = filters;
 
-    // Base query
     let queryStr = `
         SELECT
             cc.crop_cycle_id,
@@ -37,8 +32,9 @@ export async function getCycles(filters: CycleFilters): Promise<CropCycleForEmpl
         JOIN landmarks l ON fa.landmark_id = l.landmark_id
     `;
 
-    const params: any[] = [year];
-    let whereClauses: string[] = [`cc.crop_cycle_year = $1`];
+    // FIXED: Replaced 'any[]' with safe type
+    const params: (string | number)[] = [year];
+    const whereClauses: string[] = [`cc.crop_cycle_year = $1`]; // Changed 'let' to 'const'
     let paramIndex = 2;
 
     if (query) {
@@ -72,10 +68,6 @@ export async function getCycles(filters: CycleFilters): Promise<CropCycleForEmpl
     }
 }
 
-
-/**
- * Fetches a list of active crop cycles for the current year.
- */
 export async function getAssignedCycles(year: number): Promise<CropCycleForEmployee[]> {
     try {
         const data = await sql<CropCycleForEmployee>`
@@ -102,9 +94,6 @@ export async function getAssignedCycles(year: number): Promise<CropCycleForEmplo
     }
 }
 
-/**
- * Searches all crop cycles in a given year based on a farmer's name or mobile number.
- */
 export async function searchAllCycles(query: string, year: number): Promise<CropCycleForEmployee[]> {
     try {
         const data = await sql<CropCycleForEmployee>`
@@ -133,9 +122,6 @@ export async function searchAllCycles(query: string, year: number): Promise<Crop
     }
 }
 
-/**
- * Fetches specific details for a single crop cycle needed for the visit form.
- */
 export async function getCycleForVisit(cycleId: number): Promise<CycleForVisit | null> {
     try {
         const data = await sql`
@@ -168,10 +154,6 @@ export async function getCycleForVisit(cycleId: number): Promise<CycleForVisit |
     }
 }
 
-
-/**
- * NEW: Fetches a list of farmers who have farms with the same landmark.
- */
 export async function getCyclesByLandmark(landmarkId: number, currentCycleId: number): Promise<FarmerByLandmark[]> {
   try {
     const data = await sql<FarmerByLandmark>`
@@ -196,10 +178,6 @@ export async function getCyclesByLandmark(landmarkId: number, currentCycleId: nu
   }
 }
 
-
-/**
- * Returns a hardcoded list of fertilizer options for the visit form.
- */
 export async function getFertilizerOptions(): Promise<{ id: string; name: string; }[]> {
     return [
         { id: 'dap', name: 'DAP (ડીએપી)' },
@@ -212,9 +190,6 @@ export async function getFertilizerOptions(): Promise<{ id: string; name: string
     ];
 }
 
-/**
- * Returns a hardcoded list of disease options for the visit form.
- */
 export async function getDiseaseOptions(): Promise<{ id: string; name: string; }[]> {
     return [
         { id: 'pest', name: 'Pest (ઇયળ)' },

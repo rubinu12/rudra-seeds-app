@@ -15,7 +15,6 @@ export type FormState = {
 
 export async function updateEmployeeMode(mode: 'Growing' | 'Harvesting') {
     try {
-        // FIXED: Table is 'app_settings', keys are specific
         await sql`UPDATE app_settings SET setting_value = ${mode} WHERE setting_key = 'current_employee_mode'`;
         revalidatePath('/admin/settings');
         return { success: true };
@@ -27,7 +26,6 @@ export async function updateEmployeeMode(mode: 'Growing' | 'Harvesting') {
 
 export async function updateAdminDefaultSeason(season: 'Sowing' | 'Growing' | 'Harvesting') {
     try {
-        // FIXED: Table is 'app_settings'
         await sql`UPDATE app_settings SET setting_value = ${season} WHERE setting_key = 'admin_default_season'`;
         revalidatePath('/admin/settings');
         return { success: true };
@@ -44,7 +42,7 @@ const EmployeeSchema = z.object({
     password: z.string().min(4),
 });
 
-export async function addEmployee(prevState: FormState, formData: FormData): Promise<FormState> {
+export async function addEmployee(_prevState: FormState, formData: FormData): Promise<FormState> {
     const rawData = {
         name: formData.get('name'),
         mobile: formData.get('mobile'),
@@ -57,7 +55,6 @@ export async function addEmployee(prevState: FormState, formData: FormData): Pro
     }
 
     try {
-        // FIXED: Column is 'password_hash', not 'password'
         await sql`
             INSERT INTO users (name, mobile_number, password_hash, role, is_active)
             VALUES (${validated.data.name}, ${validated.data.mobile}, ${validated.data.password}, 'employee', true)
@@ -70,9 +67,8 @@ export async function addEmployee(prevState: FormState, formData: FormData): Pro
     }
 }
 
-export async function toggleEmployee(id: string) {
+export async function toggleEmployee(id: string | number) {
     try {
-        // FIXED: ID column is 'user_id'
         await sql`UPDATE users SET is_active = NOT is_active WHERE user_id = ${id}`;
         revalidatePath('/admin/settings');
         return { success: true };
@@ -81,11 +77,8 @@ export async function toggleEmployee(id: string) {
     }
 }
 
-export async function updateEmployeeAssignments(employeeId: string, seedIds: number[]) {
+export async function updateEmployeeAssignments(employeeId: string | number, seedIds: number[]) {
     try {
-        // FIXED: Table is 'employee_assignments', NOT 'user_seeds'
-        // FIXED: Column is 'assignment_id' usually required, but we are doing inserts.
-        
         // 1. Remove old assignments
         await sql`DELETE FROM employee_assignments WHERE user_id = ${employeeId}`;
         
@@ -105,12 +98,11 @@ export async function updateEmployeeAssignments(employeeId: string, seedIds: num
 
 // --- 3. MASTER DATA (Villages & Landmarks) ---
 
-export async function addVillage(prevState: FormState, formData: FormData): Promise<FormState> {
+export async function addVillage(_prevState: FormState, formData: FormData): Promise<FormState> {
     const name = formData.get('village_name') as string;
     if (!name) return { message: 'Name required', success: false };
 
     try {
-        // FIXED: Column is 'village_name'
         await sql`INSERT INTO villages (village_name, is_active) VALUES (${name}, true)`;
         revalidatePath('/admin/settings');
         return { message: 'Village added', success: true };
@@ -120,17 +112,15 @@ export async function addVillage(prevState: FormState, formData: FormData): Prom
 }
 
 export async function toggleVillage(id: number) {
-    // FIXED: Column is 'village_id'
     await sql`UPDATE villages SET is_active = NOT is_active WHERE village_id = ${id}`;
     revalidatePath('/admin/settings');
 }
 
-export async function addLandmark(prevState: FormState, formData: FormData): Promise<FormState> {
+export async function addLandmark(_prevState: FormState, formData: FormData): Promise<FormState> {
     const name = formData.get('landmark_name') as string;
     if (!name) return { message: 'Name required', success: false };
 
     try {
-        // FIXED: Column is 'landmark_name'
         await sql`INSERT INTO landmarks (landmark_name, is_active) VALUES (${name}, true)`;
         revalidatePath('/admin/settings');
         return { message: 'Landmark added', success: true };
@@ -140,7 +130,6 @@ export async function addLandmark(prevState: FormState, formData: FormData): Pro
 }
 
 export async function toggleLandmark(id: number) {
-    // FIXED: Column is 'landmark_id'
     await sql`UPDATE landmarks SET is_active = NOT is_active WHERE landmark_id = ${id}`;
     revalidatePath('/admin/settings');
 }
@@ -154,7 +143,7 @@ const SeedSchema = z.object({
     company_id: z.string().min(1, "Company selection is required"),
 });
 
-export async function addSeedVariety(prevState: FormState, formData: FormData): Promise<FormState> {
+export async function addSeedVariety(_prevState: FormState, formData: FormData): Promise<FormState> {
     const rawData = {
         name: formData.get('variety_name'),
         crop_type: formData.get('crop_type'),
@@ -168,9 +157,6 @@ export async function addSeedVariety(prevState: FormState, formData: FormData): 
     }
 
     try {
-        // FIXED: Table is 'seeds'. Columns: 'variety_name' (not name), 'dest_company_id' (based on your data.ts join)
-        // NOTE: Your Schema list showed 'company_name' in seeds, but data.ts uses 'dest_company_id'. 
-        // I am using 'dest_company_id' to match your fetch logic.
         await sql`
             INSERT INTO seeds (variety_name, crop_type, color_code, dest_company_id, is_active)
             VALUES (${validated.data.name}, ${validated.data.crop_type}, ${validated.data.color_code}, ${validated.data.company_id}, true)
@@ -184,13 +170,11 @@ export async function addSeedVariety(prevState: FormState, formData: FormData): 
 }
 
 export async function toggleSeedVariety(id: number) {
-    // FIXED: ID column is 'seed_id'
     await sql`UPDATE seeds SET is_active = NOT is_active WHERE seed_id = ${id}`;
     revalidatePath('/admin/settings');
 }
 
 export async function updateSeedColor(id: number, color: string) {
-    // FIXED: ID column is 'seed_id'
     await sql`UPDATE seeds SET color_code = ${color} WHERE seed_id = ${id}`;
     revalidatePath('/admin/settings');
 }
@@ -205,7 +189,6 @@ export async function updateSeedVarietyDetails(
     }
 ) {
     try {
-        // FIXED: Columns 'variety_name', 'dest_company_id', 'seed_id'
         await sql`
             UPDATE seeds
             SET 
@@ -225,16 +208,12 @@ export async function updateSeedVarietyDetails(
 
 // --- 5. COMPANIES (Partners & Logistics) ---
 
-export async function addDestinationCompany(prevState: FormState, formData: FormData): Promise<FormState> {
+export async function addDestinationCompany(_prevState: FormState, formData: FormData): Promise<FormState> {
     const name = formData.get('company_name') as string;
-    
-    // REMOVED: address, city, type. Your schema does NOT have these columns.
-    // If you try to insert them, the database will crash.
 
     if (!name) return { message: 'Name required', success: false };
 
     try {
-        // FIXED: Table is 'destination_companies'. Column is 'company_name'.
         await sql`
             INSERT INTO destination_companies (company_name, is_active) 
             VALUES (${name}, true)
@@ -247,13 +226,12 @@ export async function addDestinationCompany(prevState: FormState, formData: Form
     }
 }
 
-export async function toggleDestinationCompany(id: string) {
-    // FIXED: Table 'destination_companies', ID 'dest_company_id'
+export async function toggleDestinationCompany(id: number | string) {
     await sql`UPDATE destination_companies SET is_active = NOT is_active WHERE dest_company_id = ${id}`;
     revalidatePath('/admin/settings');
 }
 
-export async function addShipmentCompany(prevState: FormState, formData: FormData): Promise<FormState> {
+export async function addShipmentCompany(_prevState: FormState, formData: FormData): Promise<FormState> {
     const name = formData.get('company_name') as string;
     const ownerName = formData.get('owner_name') as string;
     const ownerMobile = formData.get('owner_mobile') as string;
@@ -261,7 +239,6 @@ export async function addShipmentCompany(prevState: FormState, formData: FormDat
     if (!name) return { message: 'Name required', success: false };
 
     try {
-        // FIXED: Table 'shipment_companies', removed 'type' column (not in schema)
         await sql`
             INSERT INTO shipment_companies (company_name, owner_name, owner_mobile, is_active) 
             VALUES (${name}, ${ownerName}, ${ownerMobile}, true)
@@ -274,8 +251,7 @@ export async function addShipmentCompany(prevState: FormState, formData: FormDat
     }
 }
 
-export async function toggleShipmentCompany(id: string) {
-    // FIXED: ID column 'company_id'
+export async function toggleShipmentCompany(id: number | string) {
     await sql`UPDATE shipment_companies SET is_active = NOT is_active WHERE company_id = ${id}`;
     revalidatePath('/admin/settings');
 }

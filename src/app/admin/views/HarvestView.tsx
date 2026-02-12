@@ -1,3 +1,4 @@
+// src/app/admin/views/HarvestView.tsx
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
@@ -7,8 +8,9 @@ import { useAdmin } from '@/src/components/admin/AdminProvider';
 // ACTIONS
 import { getDashboardStats, DashboardStats } from '@/src/app/admin/actions/dashboard';
 import { getCyclesPendingSampleEntry, CycleForSampleEntry } from '@/src/app/admin/actions/sample-actions';
-import { getCyclesPendingTempPrice, getCyclesPendingVerification, CycleForPriceApproval } from '@/src/app/admin/actions/pricing-actions';
+import { getCyclesPendingTempPrice, getCyclesPendingVerification, CycleForPriceApproval, CycleForPriceVerification } from '@/src/app/admin/actions/pricing-actions';
 import { getCyclesReadyForPayment, CycleForPaymentSelection } from '@/src/app/admin/payments/actions'; 
+// getCyclesPendingTempPrice, getCyclesPendingVerification, CycleForPriceApproval
 // NEW: Import Finance Actions
 import { getFinanceDashboardData, FinanceData } from '@/src/app/admin/finance/actions';
 
@@ -47,7 +49,8 @@ export default function HarvestView() {
   // --- Modal Data States ---
   const [sampleCycles, setSampleCycles] = useState<CycleForSampleEntry[]>([]);
   const [tempPriceCycles, setTempPriceCycles] = useState<CycleForPriceApproval[]>([]);
-  const [verifyCycles, setVerifyCycles] = useState<any[]>([]);
+  // FIXED: Replaced 'any' with correct type
+  const [verifyCycles, setVerifyCycles] = useState<CycleForPriceVerification[]>([]);
   const [paymentCycles, setPaymentCycles] = useState<CycleForPaymentSelection[]>([]);
   
   // NEW: Finance Data State
@@ -243,7 +246,10 @@ export default function HarvestView() {
       <VerifyPriceModal 
         isOpen={isVerifyPriceModalOpen} 
         onClose={() => setVerifyPriceModalOpen(false)} 
-        cycles={verifyCycles} 
+        cycles={verifyCycles.map(cycle => ({
+          ...cycle,
+          sample_seed_quality: cycle.sample_seed_quality ?? ""
+        }))} 
         onRefresh={handleFetchVerifyCycles} 
         isRefreshing={isVerifyRefreshing} 
       />

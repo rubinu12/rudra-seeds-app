@@ -16,14 +16,12 @@ export type ShipmentData = {
   transport_name: string;
   driver_name: string;
   driver_mobile: string;
-  // REMOVED: varieties (intended)
-  // ADDED: Actual loaded data
   loaded_varieties: string[]; 
   farmer_names: string[];
   creation_date: Date;
   dispatch_date?: Date;
   filled_by_name: string;
-  status: string;
+  status: string; // 'Filled' | 'Dispatched' | 'Bill Generated'
 };
 
 export type BillItem = {
@@ -44,7 +42,6 @@ export async function getFilledShipments(): Promise<ShipmentData[]> {
                 dc.company_name, dc.address as company_address,
                 tc.company_name as transport_name, u.name as filled_by_name,
                 
-                -- NEW: Get Actual Loaded Varieties from items
                 ARRAY(
                     SELECT DISTINCT se.variety_name 
                     FROM shipment_items si
@@ -53,7 +50,6 @@ export async function getFilledShipments(): Promise<ShipmentData[]> {
                     WHERE si.shipment_id = s.shipment_id
                 ) as loaded_varieties,
 
-                -- NEW: Get Farmers in this shipment (Limit to 5 to avoid UI overflow)
                 ARRAY(
                     SELECT DISTINCT f.name 
                     FROM shipment_items si
@@ -77,7 +73,7 @@ export async function getFilledShipments(): Promise<ShipmentData[]> {
   }
 }
 
-// --- 2. GET HISTORY (DISPATCHED) SHIPMENTS ---
+// --- 2. GET HISTORY (DISPATCHED & BILLED) ---
 export async function getDispatchedShipments(): Promise<ShipmentData[]> {
   try {
     const res = await sql`
@@ -87,7 +83,6 @@ export async function getDispatchedShipments(): Promise<ShipmentData[]> {
                 dc.company_name, dc.address as company_address,
                 tc.company_name as transport_name, u.name as filled_by_name,
                 
-                -- NEW: Get Actual Loaded Varieties
                 ARRAY(
                     SELECT DISTINCT se.variety_name 
                     FROM shipment_items si
@@ -96,7 +91,6 @@ export async function getDispatchedShipments(): Promise<ShipmentData[]> {
                     WHERE si.shipment_id = s.shipment_id
                 ) as loaded_varieties,
 
-                -- NEW: Get Farmers
                 ARRAY(
                     SELECT DISTINCT f.name 
                     FROM shipment_items si
@@ -110,8 +104,11 @@ export async function getDispatchedShipments(): Promise<ShipmentData[]> {
             LEFT JOIN destination_companies dc ON s.dest_company_id = dc.dest_company_id
             LEFT JOIN shipment_companies tc ON s.shipment_company_id = tc.company_id
             LEFT JOIN users u ON s.dispatch_by = u.user_id
-            WHERE s.status = 'Dispatched'
-            ORDER BY s.dispatch_date DESC
+            -- [UPDATED] Fetch both Dispatched and Bill Generated
+            WHERE s.status IN ('Dispatched', 'Bill Generated')
+            ORDER BY 
+                CASE WHEN s.status = 'Dispatched' THEN 1 ELSE 2 END ASC, -- Show Pending Bills First
+                s.dispatch_date DESC
             LIMIT 50
         `;
     return res.rows as ShipmentData[];
@@ -121,7 +118,7 @@ export async function getDispatchedShipments(): Promise<ShipmentData[]> {
   }
 }
 
-// --- 3. CONFIRM DISPATCH (Sets to 'Dispatched') ---
+// --- 3. CONFIRM DISPATCH ---
 export async function confirmShipmentDispatch(shipmentId: number) {
   const session = await auth();
   if (session?.user?.role !== "admin")
@@ -142,7 +139,6 @@ export async function confirmShipmentDispatch(shipmentId: number) {
 
 export async function getShipmentBillData(shipmentId: number) {
   try {
-    // 1. Get Shipment Details
     const shipmentRes = await sql`
             SELECT 
                 s.shipment_id, s.vehicle_number, s.total_bags, s.driver_name, s.driver_mobile, s.dispatch_date, s.location,
@@ -152,7 +148,6 @@ export async function getShipmentBillData(shipmentId: number) {
             WHERE s.shipment_id = ${shipmentId}
         `;
 
-    // 2. Get Items (Farmers)
     const itemsRes = await sql`
             SELECT 
                 f.name as farmer_name,
@@ -168,7 +163,6 @@ export async function getShipmentBillData(shipmentId: number) {
             ORDER BY f.name
         `;
 
-    // 3. Get Actual Loaded Varieties
     const varietiesRes = await sql`
             SELECT DISTINCT s.variety_name
             FROM shipment_items si
@@ -189,7 +183,7 @@ export async function getShipmentBillData(shipmentId: number) {
   }
 }
 
-// --- 5. DELETE & RESTORE (Existing) ---
+// --- 5. DELETE & RESTORE ---
 export async function deleteShipment(shipmentId: number) {
   const session = await auth();
   if (session?.user?.role !== "admin")
@@ -214,6 +208,7 @@ export async function deleteShipment(shipmentId: number) {
   }
 }
 
+// --- 6. FINALIZE BILL ---
 export async function finalizeAndPrintBill(
   shipmentId: number,
   totalAmount: number,
@@ -227,7 +222,6 @@ export async function finalizeAndPrintBill(
   try {
     await sql`BEGIN`;
 
-    // 1. Get Company ID from Shipment
     const shipRes = await sql`
       SELECT dest_company_id, vehicle_number 
       FROM shipments 
@@ -238,18 +232,17 @@ export async function finalizeAndPrintBill(
 
     if (!companyId) throw new Error("No destination company found");
 
-    // 2. Update Shipment
+    // [UPDATED] Set status to 'Bill Generated'
     await sql`
       UPDATE shipments 
       SET 
         company_payment = ${totalAmount}, 
-        status = 'Dispatched',
+        status = 'Bill Generated', 
         dispatch_date = ${billDate}::timestamp,
         location = ${city} 
       WHERE shipment_id = ${shipmentId}
     `;
 
-    // 3. Update Ledger
     await sql`DELETE FROM company_ledger WHERE reference_id = ${shipmentId} AND transaction_type = 'DEBIT'`;
 
     await sql`

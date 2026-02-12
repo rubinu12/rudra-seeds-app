@@ -23,8 +23,8 @@ import {
 } from "@/src/app/employee/actions/weigh";
 import { GUJARATI } from "@/src/app/employee/translations";
 
-// --- Types ---
-type WeighingItem = {
+// --- EXPORTED TYPE (For DashboardClient) ---
+export type WeighingItem = {
   crop_cycle_id: number;
   farmer_name: string;
   mobile_number: string;
@@ -40,7 +40,6 @@ type WeighingItem = {
   seed_bags_returned?: number;
 };
 
-// --- Helper Text ---
 const LOCAL_TXT = {
   verify: "ચકાસો",
   lot_mismatch: "લોટ નંબર ખોટો છે",
@@ -66,12 +65,14 @@ const LOCAL_TXT = {
 export default function WeighingTab({
   collectionFilter,
   selectedVillage,
+  initialData, // Accept Props
 }: {
   collectionFilter: string;
   selectedVillage: string;
+  initialData?: WeighingItem[];
 }) {
-  const [data, setData] = useState<WeighingItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<WeighingItem[]>(initialData || []);
+  const [loading, setLoading] = useState(!initialData);
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
   // Filters & State
@@ -81,18 +82,20 @@ export default function WeighingTab({
 
   // Load Data
   useEffect(() => {
-    async function load() {
-      try {
-        const list = await getPendingWeighing();
-        setData(list as unknown as WeighingItem[]);
-      } catch (e) {
-        toast.error("ડેટા લાવવામાં ભૂલ થઈ છે");
-      } finally {
-        setLoading(false);
-      }
+    if (!initialData) {
+        async function load() {
+        try {
+            const list: unknown = await getPendingWeighing();
+            setData(list as WeighingItem[]);
+        } catch (error) {
+            toast.error("ડેટા લાવવામાં ભૂલ થઈ છે");
+        } finally {
+            setLoading(false);
+        }
+        }
+        load();
     }
-    load();
-  }, []);
+  }, [initialData]);
 
   const handleSuccess = (id: number) => {
     setExpandedId(null);
@@ -101,8 +104,6 @@ export default function WeighingTab({
   };
 
   // --- FILTERING LOGIC ---
-
-  // 1. Search
   const searchFiltered = data.filter((item) => {
     if (!localSearch) return true;
     const term = localSearch.toLowerCase();
@@ -112,14 +113,12 @@ export default function WeighingTab({
     );
   });
 
-  // 2. Location Match
   const isLocationMatch = (itemLoc: string | null) => {
     const current = collectionFilter.toLowerCase().replace(" yard", "").trim();
     const item = (itemLoc || "Farm").toLowerCase().replace(" yard", "").trim();
     return item.includes(current);
   };
 
-  // 3. Base Pools
   const assignedPool = searchFiltered.filter((item) => {
     return isLocationMatch(item.collection_loc) && item.is_assigned;
   });
@@ -128,7 +127,6 @@ export default function WeighingTab({
     return !(isLocationMatch(item.collection_loc) && item.is_assigned);
   });
 
-  // 4. Village Soft Filter
   const { displayedList, hiddenVillageList } = useMemo(() => {
     if (selectedVillage === "All") {
       return { displayedList: assignedPool, hiddenVillageList: [] };
@@ -158,7 +156,6 @@ export default function WeighingTab({
   return (
     <div className="space-y-4 pb-24 animate-in fade-in duration-300">
       
-      {/* Search Bar */}
       <div className="relative">
         <Search className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
         <input
@@ -170,7 +167,6 @@ export default function WeighingTab({
         />
       </div>
 
-      {/* PRIMARY LIST */}
       {displayedList.length > 0 ? (
         displayedList.map((item) => (
           <ExpandableCard
@@ -196,7 +192,6 @@ export default function WeighingTab({
         </div>
       )}
 
-      {/* SOFT FILTER ACCORDION (Hidden Village) */}
       {hiddenVillageList.length > 0 && (
         <div className="pt-2">
           <button
@@ -236,7 +231,6 @@ export default function WeighingTab({
         </div>
       )}
 
-      {/* OTHERS ACCORDION (Wrong Location) */}
       {otherList.length > 0 && (
         <div className="pt-4">
           <button
@@ -279,7 +273,6 @@ export default function WeighingTab({
   );
 }
 
-// --- ExpandableCard Component ---
 function ExpandableCard({
   item,
   isExpanded,

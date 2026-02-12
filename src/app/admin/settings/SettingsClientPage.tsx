@@ -7,6 +7,7 @@ import React, {
   useActionState,
   useRef,
   useEffect,
+  ReactNode,
 } from "react";
 import * as actions from "./actions";
 import type { FormState } from "./actions";
@@ -41,7 +42,7 @@ import {
   MapPinned,
   Pencil,
   Save,
-  X,
+  LucideIcon,
 } from "lucide-react";
 import { Input } from "@/src/components/ui/FormInputs";
 
@@ -873,6 +874,17 @@ const SeedVarietyItem = ({
   );
 };
 
+// --- SUB-COMPONENT PROPS (Typed) ---
+
+type MasterDataCardProps = {
+    title: string;
+    icon: LucideIcon;
+    count: number;
+    children: ReactNode;
+    colorClass: string;
+    className?: string;
+};
+
 function MasterDataCard({
   title,
   icon: Icon,
@@ -880,7 +892,7 @@ function MasterDataCard({
   children,
   colorClass,
   className = "",
-}: any) {
+}: MasterDataCardProps) {
   return (
     <div
       className={`bg-surface rounded-[2rem] border border-outline/10 shadow-sm flex flex-col overflow-hidden ${className}`}
@@ -903,7 +915,13 @@ function MasterDataCard({
   );
 }
 
-function QuickAddForm({ action, placeholder, inputName }: any) {
+type QuickAddFormProps = {
+    action: (prevState: FormState, formData: FormData) => Promise<FormState>;
+    placeholder: string;
+    inputName: string;
+};
+
+function QuickAddForm({ action, placeholder, inputName }: QuickAddFormProps) {
   const [state, formAction, isPending] = useActionState(action, initialState);
   const formRef = useRef<HTMLFormElement>(null);
   useEffect(() => {
@@ -941,10 +959,15 @@ function QuickAddForm({ action, placeholder, inputName }: any) {
   );
 }
 
-function DataList({ items, onToggle }: any) {
+type DataListProps = {
+    items: MasterDataItem[];
+    onToggle: (id: number) => void;
+};
+
+function DataList({ items, onToggle }: DataListProps) {
   return (
     <div className="flex-grow overflow-y-auto pr-1 custom-scrollbar space-y-2 max-h-[300px]">
-      {items.map((item: any) => (
+      {items.map((item) => (
         <DataItem
           key={item.id}
           item={item}

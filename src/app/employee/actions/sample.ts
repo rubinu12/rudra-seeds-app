@@ -1,11 +1,10 @@
 "use server";
 
 import { sql } from '@vercel/postgres';
-import { auth } from "@/auth"; // Security
+import { auth } from "@/auth";
 
 export async function getPendingSamples() {
     try {
-        // 1. Get Real User
         const session = await auth();
         const userId = session?.user?.id ? Number(session.user.id) : null;
 
@@ -28,11 +27,8 @@ export async function getPendingSamples() {
                 cc.lot_no, 
                 COALESCE(cc.quantity_in_bags, 0) as bags,
                 f.mobile_number,
-                
-                -- Location for UI filtering
                 cc.goods_collection_method as collection_loc,
                 
-                -- DYNAMIC ASSIGNMENT CHECK
                 EXISTS (
                     SELECT 1 FROM employee_assignments ea 
                     WHERE ea.seed_id = cc.seed_id AND ea.user_id = ${userId}
@@ -54,8 +50,9 @@ export async function getPendingSamples() {
         
         return result.rows;
 
-    } catch (e: any) {
-        console.error("Fetch Error:", e.message);
+    } catch (error: unknown) {
+        const msg = error instanceof Error ? error.message : "Unknown error";
+        console.error("Fetch Error:", msg);
         return [];
     }
 }
@@ -72,11 +69,11 @@ export async function markSampleReceived(cycleId: number) {
             SET 
                 status = 'Sample Collected', 
                 sample_collection_date = NOW(),
-                sampled_by = ${userId} -- Tracking the Collector
+                sampled_by = ${userId}
             WHERE crop_cycle_id = ${cycleId}
         `;
         return { success: true };
-    } catch (e) { 
+    } catch (_e) { 
         return { success: false }; 
     }
 }

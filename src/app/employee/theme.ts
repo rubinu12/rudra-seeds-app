@@ -1,7 +1,19 @@
-export const MODERN_THEMES: Record<string, any> = {
+// src/app/employee/theme.ts
+
+export type ThemeConfig = {
+  bg: string;
+  headerBg: string;
+  pill: string;
+  btn: string;
+  border: string;
+  icon: string;
+  borderColor: string;
+};
+
+export const MODERN_THEMES: Record<string, ThemeConfig> = {
   'Farm': { 
-    bg: 'bg-emerald-50', // Body BG
-    headerBg: 'bg-emerald-100/80', // Header BG
+    bg: 'bg-emerald-50', 
+    headerBg: 'bg-emerald-100/80', 
     pill: 'bg-emerald-100 text-emerald-800 border-emerald-200',
     btn: 'bg-emerald-600 shadow-emerald-200 text-white',
     border: 'border-l-emerald-500',

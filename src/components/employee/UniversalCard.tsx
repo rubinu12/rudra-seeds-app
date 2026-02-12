@@ -4,26 +4,49 @@ import {
   Phone,
   ArrowRight,
   Scale,
-  Beaker,
   Truck,
   MapPin,
   CheckCircle2,
   ChevronDown,
   ClipboardList,
-  LoaderCircle, // <--- Added Import
+  LoaderCircle,
+  Loader2,
 } from "lucide-react";
 import { MODERN_THEMES } from "@/src/app/employee/theme";
 import { GUJARATI } from "@/src/app/employee/translations";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useTransition } from "react";
 
-export default function UniversalCard({ data, location, onAction }: any) {
+// Define a flexible type that covers all potential card data shapes
+export type CardData = {
+  crop_cycle_id: number;
+  farmer_name: string;
+  mobile_number?: string | null;
+  village_name?: string;
+  landmark_name?: string | null;
+  seed_variety: string;
+  color_code?: string;
+  status: string;
+  
+  // Optional fields specific to certain tabs
+  bags?: number; // Normalized field for display
+  quantity_in_bags?: number | null; // Database field
+  lot_no?: string | null;
+  is_farmer_paid?: boolean | null;
+};
+
+type Props = {
+  data: CardData;
+  location: string;
+  onAction: (loc?: string) => Promise<void> | void;
+};
+
+export default function UniversalCard({ data, location, onAction }: Props) {
   const theme = MODERN_THEMES[location] || MODERN_THEMES["Farm"];
-  const [isLoading, setIsLoading] = useState(false);
-
-  // Initialize with the global location passed from props
+  
+  // NEW: useTransition for smoother server action handling
+  const [isPending, startTransition] = useTransition();
   const [selectedLocation, setSelectedLocation] = useState(location || "Farm");
 
-  // Update internal state if the global location changes
   useEffect(() => {
     if (location) setSelectedLocation(location);
   }, [location]);
@@ -34,13 +57,15 @@ export default function UniversalCard({ data, location, onAction }: any) {
     background: `linear-gradient(to right, ${seedColor}08, #ffffff 40%)`,
   };
 
-  const handleAction = async () => {
-    if (isLoading) return;
-    setIsLoading(true);
-    // await allows the UI to stay in "Loading" state until navigation/action completes
-    await onAction(selectedLocation); 
-    setIsLoading(false);
+  const handleAction = () => {
+    // Wrap the action in startTransition
+    startTransition(async () => {
+      await onAction(selectedLocation);
+    });
   };
+
+  // Normalize bag count for display
+  const displayBags = data.bags || data.quantity_in_bags || 0;
 
   const renderAction = () => {
     if (data.is_farmer_paid || data.status === "Shipped") {
@@ -64,7 +89,7 @@ export default function UniversalCard({ data, location, onAction }: any) {
                 <select
                   value={selectedLocation}
                   onChange={(e) => setSelectedLocation(e.target.value)}
-                  disabled={isLoading}
+                  disabled={isPending}
                   className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-sm font-bold py-2 pl-3 pr-8 rounded-lg appearance-none focus:outline-none focus:ring-2 focus:ring-slate-200 disabled:opacity-50"
                 >
                   <option value="Farm">{GUJARATI.loc_farm}</option>
@@ -77,25 +102,25 @@ export default function UniversalCard({ data, location, onAction }: any) {
             </div>
 
             <div
-              onClick={handleAction}
-              className={`flex flex-col items-end cursor-pointer group ${isLoading ? 'pointer-events-none opacity-70' : ''}`}
+              onClick={!isPending ? handleAction : undefined}
+              className={`flex flex-col items-end cursor-pointer group ${isPending ? 'pointer-events-none opacity-70' : ''}`}
             >
               <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 group-hover:text-slate-600 transition-colors">
-                {isLoading ? "Saving..." : `${GUJARATI.btn_mark_harvested}?`}
+                {isPending ? "Saving..." : `${GUJARATI.btn_mark_harvested}?`}
               </label>
               <div
                 className={`w-12 h-7 rounded-full transition-all duration-300 ease-in-out flex items-center px-1 shadow-inner ${
-                  isLoading
+                  isPending
                     ? "bg-green-200"
                     : "bg-slate-200 group-hover:bg-slate-300"
                 }`}
               >
                 <div
                   className={`w-5 h-5 bg-white rounded-full shadow-md transform transition-transform duration-300 ${
-                    isLoading ? "translate-x-5" : "translate-x-0"
+                    isPending ? "translate-x-5" : "translate-x-0"
                   }`}
                 >
-                  {isLoading && <LoaderCircle className="w-3 h-3 text-green-600 animate-spin m-1" />}
+                  {isPending && <LoaderCircle className="w-3 h-3 text-green-600 animate-spin m-1" />}
                 </div>
               </div>
             </div>
@@ -106,11 +131,11 @@ export default function UniversalCard({ data, location, onAction }: any) {
         return (
           <button
             onClick={handleAction}
-            disabled={isLoading}
-            className={`w-full py-3 mt-3 rounded-xl font-bold text-sm text-white shadow-md active:scale-95 transition-transform flex items-center justify-center gap-2 ${theme.btn} ${isLoading ? 'opacity-70 cursor-wait' : ''}`}
+            disabled={isPending}
+            className={`w-full py-3 mt-3 rounded-xl font-bold text-sm text-white shadow-md active:scale-95 transition-transform flex items-center justify-center gap-2 ${theme.btn} ${isPending ? 'opacity-70 cursor-not-allowed' : ''}`}
           >
-            {isLoading ? <LoaderCircle className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-            {isLoading ? "Processing..." : GUJARATI.btn_mark_collected}
+            {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+            {isPending ? "Processing..." : GUJARATI.btn_mark_collected}
           </button>
         );
 
@@ -122,11 +147,11 @@ export default function UniversalCard({ data, location, onAction }: any) {
             </div>
             <button
               onClick={handleAction}
-              disabled={isLoading}
-              className={`w-full py-3 rounded-xl font-bold text-sm text-white shadow-md active:scale-95 transition-transform flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 border border-purple-500 ${isLoading ? 'opacity-70 cursor-wait' : ''}`}
+              disabled={isPending}
+              className={`w-full py-3 rounded-xl font-bold text-sm text-white shadow-md active:scale-95 transition-transform flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 border border-purple-500 ${isPending ? 'opacity-70 cursor-not-allowed' : ''}`}
             >
-              {isLoading ? <LoaderCircle className="w-4 h-4 animate-spin" /> : <ClipboardList className="w-4 h-4" />}
-              {isLoading ? "Opening Form..." : GUJARATI.btn_enter_lab_data}
+              {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <ClipboardList className="w-4 h-4" />}
+              {isPending ? "Opening Form..." : GUJARATI.btn_enter_lab_data}
             </button>
           </div>
         );
@@ -135,11 +160,11 @@ export default function UniversalCard({ data, location, onAction }: any) {
         return (
           <button
             onClick={handleAction}
-            disabled={isLoading}
-            className={`w-full py-3 mt-3 rounded-xl font-bold text-sm text-white shadow-md active:scale-95 transition-transform flex items-center justify-center gap-2 ${theme.btn} ${isLoading ? 'opacity-70 cursor-wait' : ''}`}
+            disabled={isPending}
+            className={`w-full py-3 mt-3 rounded-xl font-bold text-sm text-white shadow-md active:scale-95 transition-transform flex items-center justify-center gap-2 ${theme.btn} ${isPending ? 'opacity-70 cursor-not-allowed' : ''}`}
           >
-            {isLoading ? <LoaderCircle className="w-4 h-4 animate-spin" /> : <Scale className="w-4 h-4" />}
-            {isLoading ? "Opening Scale..." : GUJARATI.btn_start_weighing}
+            {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Scale className="w-4 h-4" />}
+            {isPending ? "Opening Scale..." : GUJARATI.btn_start_weighing}
           </button>
         );
 
@@ -147,11 +172,11 @@ export default function UniversalCard({ data, location, onAction }: any) {
         return (
           <button
             onClick={handleAction}
-            disabled={isLoading}
-            className={`w-full py-3 mt-3 rounded-xl font-bold text-sm text-white shadow-md active:scale-95 transition-transform flex items-center justify-center gap-2 ${theme.btn} ${isLoading ? 'opacity-70 cursor-wait' : ''}`}
+            disabled={isPending}
+            className={`w-full py-3 mt-3 rounded-xl font-bold text-sm text-white shadow-md active:scale-95 transition-transform flex items-center justify-center gap-2 ${theme.btn} ${isPending ? 'opacity-70 cursor-not-allowed' : ''}`}
           >
-            {isLoading ? <LoaderCircle className="w-4 h-4 animate-spin" /> : <Truck className="w-4 h-4" />}
-            {isLoading ? "Loading..." : GUJARATI.btn_add_to_shipment}
+            {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Truck className="w-4 h-4" />}
+            {isPending ? "Loading..." : GUJARATI.btn_add_to_shipment}
           </button>
         );
 
@@ -206,11 +231,11 @@ export default function UniversalCard({ data, location, onAction }: any) {
         >
           {data.seed_variety}
         </span>
-        {data.bags > 0 && (
+        {displayBags > 0 && (
           <span
             className={`px-2.5 py-1 rounded-md border text-xs font-bold uppercase tracking-wide ${theme.pill}`}
           >
-            {data.bags} {GUJARATI.bags}
+            {displayBags} {GUJARATI.bags}
           </span>
         )}
         {data.lot_no && (

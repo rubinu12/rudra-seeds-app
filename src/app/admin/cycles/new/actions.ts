@@ -15,7 +15,7 @@ function getSeason(date: Date): string {
     return `Zaid${year}`;
 }
 
-export async function createOrUpdateCycle(prevState: FormState, formData: FormData): Promise<FormState> {
+export async function createOrUpdateCycle(_prevState: FormState, formData: FormData): Promise<FormState> {
   let farmerId = formData.get('farmer_id') ? Number(formData.get('farmer_id')) : null;
   let farmId = formData.get('farm_id') ? Number(formData.get('farm_id')) : null;
 
@@ -26,7 +26,6 @@ export async function createOrUpdateCycle(prevState: FormState, formData: FormDa
   const newBankAccounts = newBankAccountsJSON ? JSON.parse(newBankAccountsJSON) : [];
 
   try {
-    // Farmer, Farm, and Bank Account creation logic remains the same
     if (!farmerId) {
       const farmerData = {
           name: formData.get('farmer_name') as string,
@@ -66,7 +65,6 @@ export async function createOrUpdateCycle(prevState: FormState, formData: FormDa
       }
     }
 
-    // --- FINAL, CORRECTED PAYMENT LOGIC ---
     const paymentChoice = formData.get('payment_choice') as string;
     const totalCost = Number(formData.get('total_cost'));
     const amountPaidInput = Number(formData.get('amount_paid'));
@@ -82,7 +80,6 @@ export async function createOrUpdateCycle(prevState: FormState, formData: FormDa
         finalPaymentStatus = 'Credit';
     } else if (paymentChoice === 'Partial') {
         finalAmountPaid = amountPaidInput;
-        // Automatically determine the correct status based on the amount
         if (finalAmountPaid <= 0) {
             finalPaymentStatus = 'Credit';
         } else if (finalAmountPaid >= totalCost) {
@@ -96,17 +93,15 @@ export async function createOrUpdateCycle(prevState: FormState, formData: FormDa
     const sowingDate = formData.get('sowing_date') as string;
     const season = getSeason(new Date(sowingDate));
 
-    // This part correctly reads the string value from the form data
     const cycleData = {
       seed_id: Number(formData.get('seed_id')),
       sowing_date: sowingDate,
       seed_bags_purchased: Number(formData.get('seed_bags_purchased')),
       seed_cost: totalCost,
-      goods_collection_method: formData.get('goods_collection_method') as string, // Reads the string value
+      goods_collection_method: formData.get('goods_collection_method') as string,
       crop_cycle_year: new Date(sowingDate).getFullYear()
     };
 
-    // This SQL statement correctly uses the string value
     await sql`
         INSERT INTO crop_cycles (
             farmer_id, farm_id, seed_id, sowing_date, seed_bags_purchased,
@@ -120,17 +115,14 @@ export async function createOrUpdateCycle(prevState: FormState, formData: FormDa
             ${JSON.stringify(finalAccountIds)}, ${season}, ${finalAmountPaid}, ${amountRemaining}
         )`;
 
-  } catch (error: any) {
-    console.error('Database Error:', error);
-    return { message: `Database Error: ${error.message}`, success: false };
+  } catch (error: unknown) {
+    // Correctly handle unknown error type
+    const message = error instanceof Error ? error.message : "Unknown Error";
+    console.error('Database Error:', message);
+    return { message: `Database Error: ${message}`, success: false };
   }
 
-  revalidatePath('/admin/dashboard'); // Keep revalidating dashboard in case its data changed
-  revalidatePath('/admin/cycles/new'); // Revalidate this page too
-
-  // === UPDATED REDIRECT LINE BELOW ===
-  redirect('/admin/cycles/new'); // Changed from '/admin/dashboard'
-
-  // Adding a success message for clarity, although redirect happens immediately
-  // return { message: 'Cycle created successfully.', success: true };
+  revalidatePath('/admin/dashboard'); 
+  revalidatePath('/admin/cycles/new'); 
+  redirect('/admin/cycles/new'); 
 }

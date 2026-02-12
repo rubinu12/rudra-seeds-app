@@ -4,7 +4,6 @@
 import React, { useState } from "react";
 import type {
   ChequePrintData,
-  StoredChequeDetail,
 } from "@/src/lib/payment-data";
 import { ArrowLeft, ArrowRight, Printer } from "lucide-react"; // Import navigation icons
 

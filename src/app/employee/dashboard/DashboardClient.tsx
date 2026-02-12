@@ -4,8 +4,8 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import SmartHeader from "@/src/components/employee/SmartHeader";
 import UniversalCard from "@/src/components/employee/UniversalCard";
-import SampleTab from "@/src/components/employee/tabs/SampleTab";
-import WeighingTab from "@/src/components/employee/tabs/WeighingTab";
+import SampleTab, { SampleTabItem } from "@/src/components/employee/tabs/SampleTab";
+import WeighingTab, { WeighingItem } from "@/src/components/employee/tabs/WeighingTab";
 import LoadTab from "@/src/components/employee/tabs/LoadTab";
 
 import { searchGlobalCycles } from "@/src/app/employee/actions/search";
@@ -15,23 +15,35 @@ import { MODERN_THEMES } from "@/src/app/employee/theme";
 import { GUJARATI } from "@/src/app/employee/translations";
 import { useDebounce } from "@/src/hooks/useDebounce";
 import { LoaderCircle, SearchX } from "lucide-react";
+import { CropCycleForEmployee } from "@/src/lib/definitions";
+import { ActiveShipment } from "@/src/app/employee/actions/shipments";
+// Import the new interface
+import { MasterData } from "@/src/components/employee/loading/NewShipmentModal";
 
+// Define strict types for the props
 interface DashboardClientProps {
   initialLocation: string;
+  initialSamples: SampleTabItem[]; // Strict Type
+  initialWeighings: WeighingItem[]; // Strict Type
+  initialShipments: ActiveShipment[];
+  masterData: MasterData | null; // Strict type
 }
 
 export default function DashboardClient({
   initialLocation,
+  initialSamples,
+  initialWeighings,
+  initialShipments,
+  masterData
 }: DashboardClientProps) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState("sample");
   
-  // --- GLOBAL FILTERS ---
   const [location, setLocation] = useState(initialLocation || "Farm");
-  const [selectedVillage, setSelectedVillage] = useState("All"); // <--- Lifted State
+  const [selectedVillage, setSelectedVillage] = useState("All"); 
 
   const [searchTerm, setSearchTerm] = useState("");
-  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searchResults, setSearchResults] = useState<CropCycleForEmployee[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const debouncedSearch = useDebounce(searchTerm, 300);
 
@@ -40,7 +52,6 @@ export default function DashboardClient({
   const handleLocationChange = (newLoc: string) => {
     setLocation(newLoc);
     localStorage.setItem("defaultLocation", newLoc);
-    // Reset village when location changes to avoid confusion
     if(newLoc !== 'Farm') setSelectedVillage("All");
   };
 
@@ -48,7 +59,7 @@ export default function DashboardClient({
     if (debouncedSearch.length >= 2) {
       setIsSearching(true);
       searchGlobalCycles(debouncedSearch).then((data) => {
-        setSearchResults(data);
+        setSearchResults(data as CropCycleForEmployee[]);
         setIsSearching(false);
       });
     } else {
@@ -65,15 +76,15 @@ export default function DashboardClient({
     if (currentStatus === "Growing" && collectionLoc) {
       await markAsHarvested(cycleId, collectionLoc);
       const updated = await searchGlobalCycles(debouncedSearch);
-      setSearchResults(updated);
+      setSearchResults(updated as CropCycleForEmployee[]);
+      router.refresh(); 
     } else if (currentStatus === "Harvested") {
       await markSampleReceived(cycleId);
       if (searchTerm) {
         const updated = await searchGlobalCycles(debouncedSearch);
-        setSearchResults(updated);
-      } else {
-        window.location.reload();
-      }
+        setSearchResults(updated as CropCycleForEmployee[]);
+      } 
+      router.refresh(); 
     } else if (currentStatus === "Sample Collected") {
       router.push(`/employee/sample/${cycleId}`);
     }
@@ -81,8 +92,6 @@ export default function DashboardClient({
 
   return (
     <div className={`flex-grow ${theme.bg} transition-colors duration-500 min-h-screen`}>
-      
-      {/* --- SMART HEADER WITH GLOBAL FILTERS --- */}
       <SmartHeader
         location={location}
         setLocation={handleLocationChange}
@@ -90,7 +99,6 @@ export default function DashboardClient({
         setActiveTab={setActiveTab}
         searchTerm={searchTerm}
         setSearchTerm={setSearchTerm}
-        // Pass Village Props
         selectedVillage={selectedVillage}
         setSelectedVillage={setSelectedVillage}
       />
@@ -128,17 +136,29 @@ export default function DashboardClient({
           </div>
         ) : (
           <>
-            {/* PASS FILTERS TO TABS */}
             {activeTab === "sample" && (
-                <SampleTab location={location} selectedVillage={selectedVillage} />
+                <SampleTab 
+                  location={location} 
+                  selectedVillage={selectedVillage} 
+                  initialData={initialSamples}
+                />
             )}
 
             {activeTab === "weigh" && (
-              <WeighingTab collectionFilter={location} selectedVillage={selectedVillage} />
+              <WeighingTab 
+                collectionFilter={location} 
+                selectedVillage={selectedVillage} 
+                initialData={initialWeighings}
+              />
             )}
 
-            {/* Load Tab usually doesn't need village filter as strictly, or handles it internally */}
-            {activeTab === "load" && <LoadTab location={location} />}
+            {activeTab === "load" && (
+              <LoadTab 
+                location={location} 
+                initialData={initialShipments}
+                masterData={masterData}
+              />
+            )}
           </>
         )}
       </main>

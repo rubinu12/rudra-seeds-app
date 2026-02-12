@@ -4,7 +4,7 @@ import { sql } from '@vercel/postgres';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
-import { addDays, formatISO } from 'date-fns';
+import { formatISO } from 'date-fns';
 
 // --- Types ---
 export type CycleForPaymentSelection = {
@@ -27,11 +27,9 @@ export type ProcessPaymentFormState = {
     cycleId?: number;
 };
 
-// --- 1. FETCH ACTION (Using 'loading_date') ---
+// --- 1. FETCH ACTION ---
 export async function getCyclesReadyForPayment(): Promise<CycleForPaymentSelection[]> {
     try {
-        console.log("🔍 Fetching cycles ready for payment...");
-
         const result = await sql<CycleForPaymentSelection>`
             SELECT 
                 cc.crop_cycle_id,
@@ -48,8 +46,6 @@ export async function getCyclesReadyForPayment(): Promise<CycleForPaymentSelecti
                 (cc.is_farmer_paid IS NULL OR cc.is_farmer_paid = FALSE)
             ORDER BY cc.loading_date DESC
         `;
-        
-        console.log(`✅ Found ${result.rowCount} cycles ready for payment.`);
         return result.rows;
     } catch (error) {
         console.error("❌ Error fetching payment cycles:", error);
@@ -62,7 +58,6 @@ const ChequeDetailSchema = z.object({
     payee_name: z.string().min(1, "Payee name cannot be empty."),
     cheque_number: z.string().min(1, "Cheque number cannot be empty."),
     amount: z.coerce.number().positive("Cheque amount must be positive."),
-    // NEW: Allow date string. Validation ensures it's a valid date.
     due_date: z.string().refine((date) => !isNaN(Date.parse(date)), {
         message: "Invalid due date format",
     }),
@@ -70,17 +65,18 @@ const ChequeDetailSchema = z.object({
 
 const ProcessPaymentSchema = z.object({
     cycleId: z.coerce.number().int().positive(),
+    // [REMOVED] Bill Number manual validation
     grossPayment: z.coerce.number(),
     netPayment: z.coerce.number().positive("Net payment must be positive."),
     dueDays: z.coerce.number().int().min(0).default(22),
-    cheque_details: z.string().transform((str, ctx) => {
+    cheque_details: z.string().transform((str) => {
         try {
             const parsed = JSON.parse(str);
             const result = z.array(ChequeDetailSchema).safeParse(parsed);
             if (!result.success) return z.NEVER;
             if (result.data.length === 0) return z.NEVER;
             return result.data;
-        } catch (e) { return z.NEVER; }
+        } catch (_e) { return z.NEVER; }
     }),
 }).refine(data => {
     const totalChequeAmount = data.cheque_details.reduce((sum, cheque) => sum + cheque.amount, 0);
@@ -88,9 +84,9 @@ const ProcessPaymentSchema = z.object({
 }, { message: "Total cheque amount mismatch", path: ["cheque_details"] });
 
 
-// --- 2. PROCESS ACTION (Unchanged) ---
+// --- 2. PROCESS ACTION ---
 export async function processFarmerPaymentAction(
-    prevState: ProcessPaymentFormState | undefined,
+    _prevState: ProcessPaymentFormState | undefined,
     formData: FormData
 ): Promise<ProcessPaymentFormState> {
     const validatedFields = ProcessPaymentSchema.safeParse(Object.fromEntries(formData.entries()));
@@ -107,17 +103,40 @@ export async function processFarmerPaymentAction(
     const { cycleId, grossPayment, netPayment, cheque_details } = validatedFields.data;
     const paymentDate = new Date();
 
-    // Map the incoming cheques. We TRUST the due_date coming from the client now.
+    // --- [AUTO-BILL LOGIC START] ---
+    const year = paymentDate.getFullYear();
+    const prefix = `${year}-B-`;
+    
+    // 1. Find the last bill number for this year (e.g., 2024-B-055)
+    const lastBillRes = await sql`
+        SELECT bill_number FROM crop_cycles 
+        WHERE bill_number LIKE ${prefix + '%'}
+        ORDER BY bill_number DESC 
+        LIMIT 1
+    `;
+
+    let nextSeq = 1;
+    if (lastBillRes.rowCount && lastBillRes.rowCount > 0 && lastBillRes.rows[0].bill_number) {
+        const last = lastBillRes.rows[0].bill_number; // "2024-B-055"
+        const parts = last.split('-'); // ["2024", "B", "055"]
+        const lastNum = parseInt(parts[parts.length - 1], 10); // 55
+        if (!isNaN(lastNum)) {
+            nextSeq = lastNum + 1; // 56
+        }
+    }
+
+    // 2. Generate New Bill Number (e.g., 2024-B-056)
+    const autoBillNumber = `${prefix}${String(nextSeq).padStart(3, '0')}`;
+    // --- [AUTO-BILL LOGIC END] ---
+
     const chequeDetailsForDb = cheque_details.map(cheque => ({
         payee_name: cheque.payee_name,
         cheque_number: cheque.cheque_number,
         amount: cheque.amount,
-        // Ensure standard ISO format for DB
         due_date: formatISO(new Date(cheque.due_date), { representation: 'date' }),
-        status: "due" // <--- UPDATED: Matches your legacy data format (lowercase)
+        status: "due" 
     }));
 
-    // Find the latest due date to set as the overall 'cheque_due_date' column (for sorting/alerts)
     const allDates = chequeDetailsForDb.map(c => new Date(c.due_date).getTime());
     const maxDueDateISO = formatISO(new Date(Math.max(...allDates)), { representation: 'date' });
 
@@ -125,9 +144,10 @@ export async function processFarmerPaymentAction(
         await sql`
             UPDATE crop_cycles
             SET
+                bill_number = ${autoBillNumber},  -- [UPDATED] Using Auto Generated Number
                 total_payment = ${grossPayment},
                 final_payment = ${netPayment},
-                cheque_due_date = ${maxDueDateISO}, -- Set this to the furthest cheque date
+                cheque_due_date = ${maxDueDateISO}, 
                 cheque_details = ${JSON.stringify(chequeDetailsForDb)},
                 status = 'paid',
                 is_farmer_paid = FALSE,
@@ -137,7 +157,7 @@ export async function processFarmerPaymentAction(
 
         revalidatePath(`/admin/dashboard`);
         revalidatePath(`/admin/payments/${cycleId}/process`);
-    } catch (error) {
+    } catch (_error) {
         return { message: "Database error.", success: false, cycleId };
     }
 

@@ -1,4 +1,3 @@
-// components/admin/cycles/new/PaymentSection.tsx
 "use client";
 import React from "react";
 import {
@@ -6,44 +5,51 @@ import {
   Banknote,
   Coins,
   CheckCircle2,
-  Circle,
   Save,
+  LucideIcon,
 } from "lucide-react";
 import { Input } from "@/src/components/ui/FormInputs";
 
+// UPDATED TYPE DEFINITION TO MATCH SOWING SECTION
+export type CycleData = {
+  landmarkId: string;
+  seedId: string;
+  bags: number;
+  date: string;
+  goods_collection_method: string;
+  paymentChoice: string;
+  amountPaid: number;
+  lot_no: string; // Added this to match SowingSection
+};
+
 type Props = {
-  cycleState: [any, Function];
+  cycleState: [CycleData, React.Dispatch<React.SetStateAction<CycleData>>];
   totalCost: number;
-  seedPrice: number;
   isFormValid: boolean;
-  handleClear: () => void;
-  state: { message: string; success: boolean };
   onAddToQueue: () => void;
 };
 
 export const PaymentSection = ({
   cycleState,
   totalCost,
-  seedPrice,
   isFormValid,
-  handleClear,
-  state,
   onAddToQueue,
 }: Props) => {
   const [cycleData, setCycleData] = cycleState;
 
   const handlePaymentChoiceChange = (choice: string) => {
-    setCycleData((prev: any) => ({ ...prev, paymentChoice: choice }));
+    // Explicit typing for prev
+    setCycleData((prev: CycleData) => ({ ...prev, paymentChoice: choice }));
   };
 
   const handleAmountPaidChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setCycleData((prev: any) => ({
+    // Explicit typing for prev
+    setCycleData((prev: CycleData) => ({
       ...prev,
       amountPaid: Number(e.target.value),
     }));
   };
 
-  // Calculate remaining based on current choice
   const amountRemaining =
     cycleData.paymentChoice === "Paid"
       ? 0
@@ -51,8 +57,13 @@ export const PaymentSection = ({
         ? totalCost
         : Math.max(0, totalCost - cycleData.amountPaid);
 
-  // --- Helper: Horizontal Radio Card ---
-  const RadioCard = ({ value, label, icon: Icon }: any) => {
+  type RadioCardProps = {
+    value: string;
+    label: string;
+    icon: LucideIcon;
+  };
+
+  const RadioCard = ({ value, label, icon: Icon }: RadioCardProps) => {
     const isSelected = cycleData.paymentChoice === value;
     return (
       <label
@@ -60,8 +71,8 @@ export const PaymentSection = ({
                 relative flex flex-col items-center justify-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all duration-200
                 ${
                   isSelected
-                    ? "border-primary bg-primary/5 shadow-sm" // Selected Style
-                    : "border-outline/20 hover:border-outline/40 hover:bg-surface-container-high bg-surface" // Unselected Style
+                    ? "border-primary bg-primary/5 shadow-sm"
+                    : "border-outline/20 hover:border-outline/40 hover:bg-surface-container-high bg-surface"
                 }
             `}
       >
@@ -73,8 +84,6 @@ export const PaymentSection = ({
           onChange={() => handlePaymentChoiceChange(value)}
           className="sr-only"
         />
-
-        {/* Icon Circle */}
         <div
           className={`
                     p-3 rounded-full transition-colors
@@ -83,8 +92,6 @@ export const PaymentSection = ({
         >
           <Icon className="w-6 h-6" />
         </div>
-
-        {/* Label & Check */}
         <div className="flex items-center gap-2">
           <span
             className={`font-medium text-sm ${isSelected ? "text-primary" : "text-on-surface-variant"}`}
@@ -100,7 +107,6 @@ export const PaymentSection = ({
   return (
     <div className="bg-surface-container rounded-[1.75rem] p-6 shadow-md flex flex-col h-full justify-between">
       <div>
-        {/* Header */}
         <div className="flex items-center justify-between gap-4 mb-6">
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 grid place-items-center rounded-2xl bg-secondary-container">
@@ -122,14 +128,12 @@ export const PaymentSection = ({
           </div>
         </div>
 
-        {/* --- HORIZONTAL GRID --- */}
         <div className="grid grid-cols-3 gap-3 mb-6">
           <RadioCard value="Paid" label="Paid" icon={Banknote} />
           <RadioCard value="Credit" label="Credit" icon={CreditCard} />
           <RadioCard value="Partial" label="Partial" icon={Coins} />
         </div>
 
-        {/* --- PARTIAL PAYMENT INPUT --- */}
         {cycleData.paymentChoice === "Partial" && (
           <div className="animate-fadeIn mb-6 p-4 bg-surface rounded-xl border border-outline/20">
             <Input
@@ -139,7 +143,7 @@ export const PaymentSection = ({
               label="Amount Paid Now (₹)"
               value={cycleData.amountPaid}
               onChange={handleAmountPaidChange}
-              onWheel={(e) => e.currentTarget.blur()} // Prevent scroll change
+              onWheel={(e) => e.currentTarget.blur()}
               min={0}
               max={totalCost}
               required
@@ -156,7 +160,6 @@ export const PaymentSection = ({
         )}
       </div>
 
-      {/* --- ACTION BUTTON --- */}
       <div className="mt-4 pt-6 border-t border-outline/20">
         <button
           type="button"

@@ -1,10 +1,11 @@
+// src/app/admin/dashboard/DashboardController.tsx
 "use client";
 
 import { useAdmin } from "@/src/components/admin/AdminProvider";
 import Navbar from "@/src/components/admin/Navbar";
 import Sidebar from "@/src/components/admin/Sidebar";
 import HarvestView from "../views/HarvestView";
-import SowingView from "../views/SowingView"; // New Import
+import SowingView from "../views/SowingView";
 
 export default function DashboardController() {
   const { mode, setMode } = useAdmin();
@@ -12,7 +13,11 @@ export default function DashboardController() {
   return (
     <div className="flex flex-col h-full">
       {/* 1. Navbar: Controls the 'mode' state */}
-      <Navbar activeSeason={mode} onSeasonChange={(m) => setMode(m as any)} />
+      {/* FIXED: Removed 'as any' by trusting the string is a valid Season type */}
+      <Navbar 
+        activeSeason={mode} 
+        onSeasonChange={(m) => setMode(m as 'Sowing' | 'Growing' | 'Harvesting')} 
+      />
 
       {/* 2. Responsive Grid Layout */}
       <main className="max-w-screen-xl mx-auto w-full p-4 md:p-8">

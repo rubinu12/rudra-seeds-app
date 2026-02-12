@@ -1,14 +1,12 @@
-// components/ui/FloatingLabelSelect.tsx
+// src/components/ui/FloatingLabelSelect.tsx
 import React from 'react';
 import { ChevronDown } from 'lucide-react';
 
-type FloatingLabelSelectProps = {
+type FloatingLabelSelectProps = React.SelectHTMLAttributes<HTMLSelectElement> & {
   id: string;
   name: string;
   label: string;
   children: React.ReactNode;
-  className?: string;
-  [x: string]: any; // Allow for other props
 };
 
 export default function FloatingLabelSelect({

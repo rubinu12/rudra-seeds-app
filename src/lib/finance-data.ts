@@ -1,4 +1,3 @@
-// lib/finance-data.ts
 "use server";
 
 import { sql } from "@vercel/postgres";
@@ -6,9 +5,9 @@ import { sql } from "@vercel/postgres";
 export type CompanyLedger = {
   company_id: number;
   company_name: string;
-  total_shipments_value: number; // How much seed we sent
-  total_received: number; // How much they paid
-  current_due: number; // The difference
+  total_shipments_value: number;
+  total_received: number;
+  current_due: number;
   last_payment_date: string | null;
 };
 
@@ -24,7 +23,7 @@ export async function getWallets(): Promise<Wallet[]> {
     const res =
       await sql<Wallet>`SELECT * FROM virtual_wallets ORDER BY wallet_id`;
     return res.rows;
-  } catch (e) {
+  } catch (_e) {
     return [];
   }
 }
@@ -32,14 +31,10 @@ export async function getWallets(): Promise<Wallet[]> {
 // 2. The Master Ledger: Calculate Status of All Seed Companies
 export async function getCompanyLedgers(): Promise<CompanyLedger[]> {
   try {
-    // This query joins Shipments (Debt) and Payments (Credit)
     const data = await sql`
             WITH shipment_totals AS (
                 SELECT 
                     dest_company_id, 
-                    -- Formula: Total Bags * 50kg * Rate (Using approx 150/kg or fetching from items)
-                    -- For accuracy, we should ideally sum up shipment_items. 
-                    -- Assuming a standard rate for estimation if specific bill not generated.
                     SUM(total_bags * 50 * 150) as total_value 
                 FROM shipments 
                 WHERE status = 'Dispatched'
@@ -91,13 +86,11 @@ export async function recordIncomingPayment(
   ref: string
 ) {
   try {
-    // A. Record the payment
     await sql`
             INSERT INTO company_payments (dest_company_id, amount, target_wallet_id, payment_mode, reference_number)
             VALUES (${companyId}, ${amount}, ${walletId}, ${mode}, ${ref})
         `;
 
-    // B. Update Denish's Wallet Balance
     await sql`
             UPDATE virtual_wallets 
             SET balance = balance + ${amount}
@@ -105,7 +98,7 @@ export async function recordIncomingPayment(
         `;
 
     return { success: true };
-  } catch (e) {
+  } catch (_e) {
     return { success: false, message: "Database error" };
   }
 }

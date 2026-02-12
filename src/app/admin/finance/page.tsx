@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { 
   getWalletData, 
   getCompanyTradeBook, 
@@ -7,7 +8,7 @@ import {
 import FinanceClientView from "./FinanceClientView";
 
 // Force dynamic because we are dealing with live financial data
-export const dynamic = 'force-dynamic';
+
 
 export default async function FinancePage() {
   // Parallel Data Fetching for "Mind Blowing" Speed

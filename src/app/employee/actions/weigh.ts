@@ -3,7 +3,7 @@
 import { sql } from "@vercel/postgres";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { auth } from "@/auth"; // Security
+import { auth } from "@/auth";
 
 // --- Fetch Pending Weighing List ---
 export async function getPendingWeighing() {
@@ -33,7 +33,6 @@ export async function getPendingWeighing() {
                 cc.seed_bags_purchased,
                 cc.seed_bags_returned,
 
-                -- Assignment Check
                 EXISTS (
                     SELECT 1 FROM employee_assignments ea 
                     WHERE ea.seed_id = cc.seed_id AND ea.user_id = ${userId}
@@ -51,8 +50,9 @@ export async function getPendingWeighing() {
         `;
 
     return result.rows;
-  } catch (e: any) {
-    console.error("Fetch Error:", e.message);
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : "Unknown error";
+    console.error("Fetch Error:", msg);
     return [];
   }
 }
@@ -65,8 +65,8 @@ const WeighingSchema = z.object({
   bags: z.coerce.number().min(1, "Bags must be at least 1."),
 });
 
-export async function submitWeighing(prevState: any, formData: FormData) {
-  // 1. Security Check
+// Fixed: Changed prevState type from any to unknown or a specific type
+export async function submitWeighing(_prevState: unknown, formData: FormData) {
   const session = await auth();
   const userId = session?.user?.id ? Number(session.user.id) : null;
 
@@ -112,7 +112,6 @@ export async function submitWeighing(prevState: any, formData: FormData) {
     const threshold = finalSeedBags > 0 ? finalSeedBags * 50 : 0;
     const isFlagged = threshold > 0 && bags > threshold;
 
-    // 2. Update & Track
     await sql`
             UPDATE crop_cycles
             SET 
@@ -121,7 +120,7 @@ export async function submitWeighing(prevState: any, formData: FormData) {
                 bags_remaining_to_load = ${bags},
                 weighing_date = NOW(),
                 is_production_flagged = ${isFlagged},
-                weighed_by = ${userId} -- Tracking
+                weighed_by = ${userId}
             WHERE crop_cycle_id = ${cropCycleId}
         `;
 
@@ -133,8 +132,9 @@ export async function submitWeighing(prevState: any, formData: FormData) {
         ? `Saved! Warning: Yield is unnaturally high (${bags} bags). Flagged for Admin.`
         : "Weighing recorded successfully.",
     };
-  } catch (e: any) {
-    console.error("Weighing Error:", e.message);
-    return { success: false, message: "Database Error: " + e.message };
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Database Error";
+    console.error("Weighing Error:", message);
+    return { success: false, message: "Database Error: " + message };
   }
 }

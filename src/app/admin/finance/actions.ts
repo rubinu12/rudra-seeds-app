@@ -5,9 +5,7 @@ import { revalidatePath } from 'next/cache';
 
 const WALLET_ID = 1;
 
-// ==============================================================================
-// 1. SHARED TYPES
-// ==============================================================================
+// --- TYPES ---
 
 export type ChequeItem = {
   cycle_id: number;
@@ -16,6 +14,15 @@ export type ChequeItem = {
   cheque_number: string;
   due_date: string;
   index: number;
+};
+
+export type WalletTransaction = {
+  transaction_id: number;
+  transaction_date: string;
+  description: string;
+  transaction_type: 'CREDIT' | 'DEBIT';
+  amount: number;
+  reference_id?: number;
 };
 
 export type FinanceData = {
@@ -28,10 +35,9 @@ export type FinanceData = {
   companies: { id: number; name: string }[];
   debtCheques: ChequeItem[];
   totalDebt: number;
-  recentHistory: any[];
+  recentHistory: WalletTransaction[];
 };
 
-// ... (Other types like WalletStats, CompanyTradeStats remain the same) ...
 export type WalletStats = {
   balance: number;
   transactions: {
@@ -44,18 +50,20 @@ export type WalletStats = {
   }[];
 };
 
+export type LedgerEntry = {
+  date: string;
+  type: string;
+  amount: number;
+  description: string;
+};
+
 export type CompanyTradeStats = {
   id: number;
   name: string;
   total_shipped_value: number;
   total_received: number;
   current_due: number;
-  ledger: {
-    date: string;
-    type: string;
-    amount: number;
-    description: string;
-  }[];
+  ledger: LedgerEntry[];
 };
 
 export type HarvestMetric = {
@@ -71,20 +79,32 @@ export type HarvestMetric = {
   status: string;
 };
 
-// ==============================================================================
-// 2. DATA FETCHERS
-// ==============================================================================
+interface DbChequeDetail {
+  amount: string | number;
+  status: string;
+  due_date?: string;
+  dueDate?: string;
+  cheque_number?: string;
+  chequeNo?: string;
+  chequeNumber?: string;
+  clearedDate?: string; 
+}
+
+interface DbCropCycleRow {
+  crop_cycle_id: number;
+  farmer_name: string;
+  cheque_details: DbChequeDetail[];
+}
+
+// --- MAIN DASHBOARD ACTION ---
 
 export async function getFinanceDashboardData(): Promise<FinanceData> {
   try {
-    // A. Wallet Balance
     const balanceRes = await sql`SELECT balance FROM virtual_wallets WHERE wallet_id = ${WALLET_ID}`;
     const balance = Number(balanceRes.rows[0]?.balance || 0);
 
-    // B. Company List
     const compRes = await sql`SELECT dest_company_id as id, company_name as name FROM destination_companies ORDER BY company_name`;
 
-    // C. RECEIVABLES
     const receivablesRes = await sql`
       SELECT 
         dc.dest_company_id as company_id,
@@ -100,7 +120,6 @@ export async function getFinanceDashboardData(): Promise<FinanceData> {
       ) > 0 
     `;
 
-    // D. FARMER DEBT (FIXED: Handles due_date AND dueDate)
     const cyclesRes = await sql`
       SELECT cc.crop_cycle_id, f.name as farmer_name, cc.cheque_details 
       FROM crop_cycles cc
@@ -114,25 +133,22 @@ export async function getFinanceDashboardData(): Promise<FinanceData> {
     const debtCheques: ChequeItem[] = [];
     let totalDebt = 0;
 
-    cyclesRes.rows.forEach(row => {
+    const rows = cyclesRes.rows as unknown as DbCropCycleRow[];
+
+    rows.forEach(row => {
       const cheques = row.cheque_details || [];
       if (Array.isArray(cheques)) {
-        cheques.forEach((c: any, idx: number) => {
-          // 1. Identify the correct date field
-          const dateString = c.due_date || c.dueDate; // <--- THE FIX
-
-          // 2. Filter Logic
+        cheques.forEach((c, idx) => {
+          const dateString = c.due_date || c.dueDate;
           if (c.status !== 'Cleared' && dateString) {
             const dDate = new Date(dateString);
-            
-            // 3. Show if Due Today or In the Past
             if (dDate <= today) {
               const amount = Number(c.amount);
               debtCheques.push({
                 cycle_id: row.crop_cycle_id,
                 farmer_name: row.farmer_name,
                 amount: amount,
-                cheque_number: c.cheque_number || c.chequeNo || c.chequeNumber, // Handle all cases
+                cheque_number: c.cheque_number || c.chequeNo || c.chequeNumber || 'N/A', 
                 due_date: dateString,
                 index: idx
               });
@@ -143,8 +159,30 @@ export async function getFinanceDashboardData(): Promise<FinanceData> {
       }
     });
 
-    // E. History
-    const historyRes = await sql`SELECT * FROM wallet_transactions WHERE wallet_id = ${WALLET_ID} ORDER BY transaction_date DESC LIMIT 50`;
+    // [FIX 1] Timezone Correction to IST
+    const historyRes = await sql`
+      SELECT 
+        transaction_id, 
+        amount, 
+        transaction_type, 
+        description, 
+        reference_id,
+        -- Convert UTC to IST for display
+        TO_CHAR(transaction_date AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD"T"HH24:MI:SS') as formatted_date
+      FROM wallet_transactions 
+      WHERE wallet_id = ${WALLET_ID} 
+      ORDER BY transaction_date DESC 
+      LIMIT 50
+    `;
+    
+    const recentHistory: WalletTransaction[] = historyRes.rows.map(row => ({
+        transaction_id: row.transaction_id,
+        transaction_date: row.formatted_date, // Uses the IST converted time
+        description: row.description,
+        transaction_type: row.transaction_type as 'CREDIT' | 'DEBIT',
+        amount: Number(row.amount),
+        reference_id: row.reference_id
+    }));
 
     return {
       balance,
@@ -156,7 +194,7 @@ export async function getFinanceDashboardData(): Promise<FinanceData> {
       companies: compRes.rows as { id: number; name: string }[],
       debtCheques,
       totalDebt,
-      recentHistory: historyRes.rows
+      recentHistory
     };
 
   } catch (e) {
@@ -165,12 +203,11 @@ export async function getFinanceDashboardData(): Promise<FinanceData> {
   }
 }
 
-// Alias
 export async function getModalData(): Promise<FinanceData> {
     return getFinanceDashboardData();
 }
 
-// --- NEW SMART DASHBOARD FETCHERS (UNCHANGED) ---
+// --- WALLET STATISTICS ---
 
 export async function getWalletData(): Promise<WalletStats> {
   try {
@@ -183,11 +220,20 @@ export async function getWalletData(): Promise<WalletStats> {
     `;
 
     let running = currentBalance;
-    const historyWithBalance = txRes.rows.map((tx: any) => {
+    
+    const historyWithBalance = txRes.rows.map((tx) => {
       const entry = {
-        id: tx.id, date: tx.date, description: tx.description, type: tx.type, amount: Number(tx.amount), balance_after: running
+        id: tx.id, 
+        date: tx.date, 
+        description: tx.description, 
+        type: tx.type as 'CREDIT' | 'DEBIT', 
+        amount: Number(tx.amount), 
+        balance_after: running
       };
-      if (tx.type === 'CREDIT') running -= Number(tx.amount); else running += Number(tx.amount);
+      // Reverse calculation for history
+      if (tx.type === 'CREDIT') running -= Number(tx.amount); 
+      else running += Number(tx.amount);
+      
       return entry;
     });
 
@@ -198,28 +244,45 @@ export async function getWalletData(): Promise<WalletStats> {
   }
 }
 
+// --- TRADE BOOK ---
+
 export async function getCompanyTradeBook(): Promise<CompanyTradeStats[]> {
   try {
     const companiesRes = await sql`SELECT dest_company_id, company_name FROM destination_companies ORDER BY company_name`;
     const ledgerRes = await sql`SELECT company_id, transaction_date, transaction_type, amount, description FROM company_ledger ORDER BY transaction_date DESC`;
 
-    return companiesRes.rows.map((comp: any) => {
+    return companiesRes.rows.map((comp) => {
       const companyId = comp.dest_company_id;
-      const companyLedger = ledgerRes.rows.filter((l: any) => l.company_id === companyId);
+      const companyLedger = ledgerRes.rows.filter((l) => l.company_id === companyId);
       let debits = 0, credits = 0;
-      const formattedLedger = companyLedger.map((l: any) => {
+      
+      const formattedLedger: LedgerEntry[] = companyLedger.map((l) => {
         const amt = Number(l.amount);
         if (l.transaction_type === 'DEBIT') debits += amt;
         if (l.transaction_type === 'CREDIT') credits += amt;
-        return { date: l.transaction_date, type: l.transaction_type, amount: amt, description: l.description };
+        return { 
+            date: l.transaction_date, 
+            type: l.transaction_type, 
+            amount: amt, 
+            description: l.description 
+        };
       });
-      return { id: companyId, name: comp.company_name, total_shipped_value: debits, total_received: credits, current_due: debits - credits, ledger: formattedLedger };
+      return { 
+          id: companyId, 
+          name: comp.company_name, 
+          total_shipped_value: debits, 
+          total_received: credits, 
+          current_due: debits - credits, 
+          ledger: formattedLedger 
+      };
     });
   } catch (error) {
     console.error("getCompanyTradeBook Error:", error);
     return [];
   }
 }
+
+// --- HARVEST REGISTER ---
 
 export async function getHarvestRegister(): Promise<HarvestMetric[]> {
   try {
@@ -236,10 +299,18 @@ export async function getHarvestRegister(): Promise<HarvestMetric[]> {
       WHERE cc.status IN ('Loaded', 'Paid', 'paid', 'Cleared', 'Marketed') 
       ORDER BY cc.loading_date DESC
     `;
-    return result.rows.map((row: any) => ({
-      farmer_id: row.farmer_id, farmer_name: row.farmer_name, village_name: row.village_name || 'Unknown', seed_variety: row.seed_variety,
-      sown_area_vigha: Number(row.sown_area), production_bags: Number(row.production_bags), total_cycle_value: Number(row.total_value),
-      amount_paid: Number(row.paid), amount_due: Number(row.due), status: row.status
+    
+    return result.rows.map((row) => ({
+      farmer_id: row.farmer_id, 
+      farmer_name: row.farmer_name, 
+      village_name: row.village_name || 'Unknown', 
+      seed_variety: row.seed_variety,
+      sown_area_vigha: Number(row.sown_area), 
+      production_bags: Number(row.production_bags), 
+      total_cycle_value: Number(row.total_value),
+      amount_paid: Number(row.paid), 
+      amount_due: Number(row.due), 
+      status: row.status
     }));
   } catch (error) {
     console.error("getHarvestRegister Error:", error);
@@ -247,14 +318,11 @@ export async function getHarvestRegister(): Promise<HarvestMetric[]> {
   }
 }
 
-// ==============================================================================
-// 3. MUTATIONS
-// ==============================================================================
+// --- MODIFICATION ACTIONS (WITH FIXES) ---
 
 export async function adjustBalance(newBalance: number, reason: string) {
   try {
     await sql`BEGIN`;
-    // Create wallet if missing
     const walletCheck = await sql`SELECT balance FROM virtual_wallets WHERE wallet_id = ${WALLET_ID}`;
     if (walletCheck.rowCount === 0) {
         await sql`INSERT INTO virtual_wallets (wallet_id, wallet_name, balance) VALUES (${WALLET_ID}, 'Main Wallet', 0)`;
@@ -270,7 +338,7 @@ export async function adjustBalance(newBalance: number, reason: string) {
     await sql`COMMIT`;
     revalidatePath('/admin/finance');
     return { success: true };
-  } catch (e) {
+  } catch (_e) {
     await sql`ROLLBACK`;
     return { success: false };
   }
@@ -279,14 +347,22 @@ export async function adjustBalance(newBalance: number, reason: string) {
 export async function receiveCompanyPayment(companyId: number, amount: number) {
   try {
     await sql`BEGIN`;
+
+    // [FIX 2] Fetch Company Name for better Description
+    const compRes = await sql`SELECT company_name FROM destination_companies WHERE dest_company_id = ${companyId}`;
+    const companyName = compRes.rows[0]?.company_name || 'Company';
+
     await sql`UPDATE virtual_wallets SET balance = balance + ${amount} WHERE wallet_id = ${WALLET_ID}`;
-    await sql`INSERT INTO wallet_transactions (wallet_id, amount, transaction_type, description, reference_id) VALUES (${WALLET_ID}, ${amount}, 'CREDIT', 'Payment Received from Company', ${companyId})`;
+    
+    // Updated Description
+    await sql`INSERT INTO wallet_transactions (wallet_id, amount, transaction_type, description, reference_id) VALUES (${WALLET_ID}, ${amount}, 'CREDIT', ${`Payment Received from ${companyName}`}, ${companyId})`;
+    
     await sql`INSERT INTO company_ledger (company_id, transaction_type, amount, description) VALUES (${companyId}, 'CREDIT', ${amount}, 'Payment Received via Finance Hub')`;
 
     await sql`COMMIT`;
     revalidatePath('/admin/finance');
     return { success: true };
-  } catch (e) {
+  } catch (_e) {
     await sql`ROLLBACK`;
     return { success: false };
   }
@@ -297,33 +373,44 @@ export async function clearCheque(cycleId: number, chequeIndex: number, amount: 
     await sql`BEGIN`;
     await sql`UPDATE virtual_wallets SET balance = balance - ${amount} WHERE wallet_id = ${WALLET_ID}`;
 
-    const cycleRes = await sql`SELECT cheque_details FROM crop_cycles WHERE crop_cycle_id = ${cycleId}`;
-    const cheques = cycleRes.rows[0]?.cheque_details || [];
+    // [FIX 3] Fetch Farmer Name for better Description
+    const cycleRes = await sql`
+        SELECT cc.cheque_details, f.name as farmer_name
+        FROM crop_cycles cc
+        JOIN farmers f ON cc.farmer_id = f.farmer_id
+        WHERE cc.crop_cycle_id = ${cycleId}
+    `;
+    
+    const row = cycleRes.rows[0];
+    const cheques: DbChequeDetail[] = row?.cheque_details || [];
+    const farmerName = row?.farmer_name || 'Farmer';
+    
     if (cheques[chequeIndex]) {
         cheques[chequeIndex].status = 'Cleared';
         cheques[chequeIndex].clearedDate = new Date().toISOString();
     }
-    const allCleared = cheques.every((c: any) => c.status === 'Cleared');
+    
+    const allCleared = cheques.every((c) => c.status === 'Cleared');
     
     if(allCleared) {
-         await sql`UPDATE crop_cycles SET cheque_details = ${JSON.stringify(cheques)}::jsonb, status = 'Cleared', is_farmer_paid = TRUE, payment_cleared_date = NOW() WHERE crop_cycle_id = ${cycleId}`;
+          await sql`UPDATE crop_cycles SET cheque_details = ${JSON.stringify(cheques)}::jsonb, status = 'Cleared', is_farmer_paid = TRUE, payment_cleared_date = NOW() WHERE crop_cycle_id = ${cycleId}`;
     } else {
-         await sql`UPDATE crop_cycles SET cheque_details = ${JSON.stringify(cheques)}::jsonb WHERE crop_cycle_id = ${cycleId}`;
+          await sql`UPDATE crop_cycles SET cheque_details = ${JSON.stringify(cheques)}::jsonb WHERE crop_cycle_id = ${cycleId}`;
     }
 
-    await sql`INSERT INTO wallet_transactions (wallet_id, amount, transaction_type, description, reference_id) VALUES (${WALLET_ID}, ${amount}, 'DEBIT', ${`Cleared Cheque #${cycleId}`}, ${cycleId})`;
+    // Updated Description with Farmer Name
+    await sql`INSERT INTO wallet_transactions (wallet_id, amount, transaction_type, description, reference_id) VALUES (${WALLET_ID}, ${amount}, 'DEBIT', ${`Cleared Cheque for ${farmerName}`}, ${cycleId})`;
 
     await sql`COMMIT`;
     revalidatePath('/admin/finance');
     return { success: true };
-  } catch (e) {
+  } catch (_e) {
     await sql`ROLLBACK`;
     return { success: false };
   }
 }
 
 export async function refreshModalData(): Promise<FinanceData> {
-    // Re-run the main fetcher logic to get fresh DB state
     const data = await getFinanceDashboardData();
     return data;
 }

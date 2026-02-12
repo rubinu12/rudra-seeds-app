@@ -1,3 +1,4 @@
+// src/app/admin/shipments/[id]/print/page.tsx
 "use client";
 
 import { useState, useEffect } from "react";
@@ -48,9 +49,7 @@ export default function ShipmentBillPage() {
   const id = Number(params?.id);
 
   const [loading, setLoading] = useState(true);
-  const [shipmentData, setShipmentData] = useState<
-    ShipmentBillData["shipment"] | null
-  >(null);
+  const [shipmentData, setShipmentData] = useState<ShipmentBillData["shipment"] | null>(null);
 
   // --- Editable States ---
   const [rows, setRows] = useState<BillRow[]>([]);
@@ -65,18 +64,20 @@ export default function ShipmentBillPage() {
   // Initial Load
   useEffect(() => {
     if (id) {
-      getShipmentBillData(id).then((res: any) => {
+      getShipmentBillData(id).then((res) => {
         if (res) {
-          setShipmentData(res.shipment);
+          // Explicit cast to expected type to ensure safety
+          const data = res as ShipmentBillData;
+          setShipmentData(data.shipment);
 
           setDate(
-            res.shipment.dispatch_date
-              ? new Date(res.shipment.dispatch_date).toISOString().split("T")[0]
+            data.shipment.dispatch_date
+              ? new Date(data.shipment.dispatch_date).toISOString().split("T")[0]
               : new Date().toISOString().split("T")[0],
           );
-          setAtCity(res.shipment.dest_city || "");
+          setAtCity(data.shipment.dest_city || "");
 
-          const initialRows = res.items.map((item: any) => ({
+          const initialRows: BillRow[] = data.items.map((item) => ({
             ...item,
             weight: item.bags * 50,
             rate: 28, // Default Rate
@@ -122,7 +123,6 @@ export default function ShipmentBillPage() {
         toast.success("Bill Saved & Ledger Updated!");
         
         // 3. Trigger Print (Small delay just to ensure state settles)
-        // The CSS below will ensure the Toast is INVISIBLE on paper
         setTimeout(() => {
             window.print();
             setIsSaving(false);
@@ -150,9 +150,6 @@ export default function ShipmentBillPage() {
   return (
     <div className="min-h-screen bg-gray-100 p-8 print:p-0 print:bg-white font-sans text-black">
       
-      {/* --- CSS FIX --- */}
-      {/* 1. Hides Number Spinner */}
-      {/* 2. Hides Toasts (Notifications) in Print Mode */}
       {/* CSS FIXES */}
       <style jsx global>{`
         /* Hide Number Spinners */
@@ -167,20 +164,15 @@ export default function ShipmentBillPage() {
 
         /* PRINT SPECIFIC RULES */
         @media print {
-          /* 1. Remove Browser Margins (Header/Footer) */
           @page {
             size: A4;
             margin: 0; 
           }
-          
-          /* 2. Reset Body */
           body {
             margin: 0;
             padding: 0;
             background: white;
           }
-
-          /* 3. Hide Toasts/Notifications */
           [data-sonner-toaster], .sonner-toast, ol[data-sonner-toaster] {
             display: none !important;
             opacity: 0 !important;

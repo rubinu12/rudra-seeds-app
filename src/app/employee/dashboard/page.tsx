@@ -1,12 +1,20 @@
+export const dynamic = 'force-dynamic';
+
 import { sql } from '@vercel/postgres';
 import DashboardClient from './DashboardClient';
+import { getPendingSamples } from '@/src/app/employee/actions/sample';
+import { getPendingWeighing } from '@/src/app/employee/actions/weigh';
+import { getActiveShipments, getShipmentMasterData } from '@/src/app/employee/actions/shipments';
 
-// Ensure this matches your user ID for now
-const CURRENT_USER_ID = 10;
+// 1. Import the strict types we defined in the tabs
+import { SampleTabItem } from '@/src/components/employee/tabs/SampleTab';
+import { WeighingItem } from '@/src/components/employee/tabs/WeighingTab';
+import { MasterData } from '@/src/components/employee/loading/NewShipmentModal';
+
+const CURRENT_USER_ID = 10; // Hardcoded for now
 
 async function getUserDefaultLocation() {
   try {
-    // Fetch directly from DB on the server
     const result = await sql`
       SELECT default_location FROM users WHERE user_id = ${CURRENT_USER_ID}
     `;
@@ -18,8 +26,29 @@ async function getUserDefaultLocation() {
 }
 
 export default async function Page() {
-  // This runs on the server, so it's fast and has direct DB access
-  const initialLocation = await getUserDefaultLocation();
+  // 2. Fetch all data in parallel
+  // Note: These actions return 'any' or 'QueryResultRow[]', which causes the type mismatch
+  const [initialLocation, rawSamples, rawWeighings, shipments, rawMasterData] = await Promise.all([
+    getUserDefaultLocation(),
+    getPendingSamples(),
+    getPendingWeighing(),
+    getActiveShipments(),
+    getShipmentMasterData()
+  ]);
 
-  return <DashboardClient initialLocation={initialLocation} />;
+  // 3. CAST the raw data to our strict types
+  // We use 'as unknown as Type[]' to safely tell TypeScript "Trust us, the DB shape matches"
+  const samples = rawSamples as unknown as SampleTabItem[];
+  const weighings = rawWeighings as unknown as WeighingItem[];
+  const masterData = rawMasterData as unknown as MasterData;
+
+  return (
+    <DashboardClient 
+      initialLocation={initialLocation} 
+      initialSamples={samples}
+      initialWeighings={weighings}
+      initialShipments={shipments}
+      masterData={masterData} 
+    />
+  );
 }

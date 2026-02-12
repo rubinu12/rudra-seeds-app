@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Modal from '@/src/components/ui/Modal';
-import { RefreshCw, LoaderCircle, IndianRupee, Save, Droplet, Percent, CircleDotDashed, Palette, ScanText } from 'lucide-react';
+import { RefreshCw, LoaderCircle, Save, Droplet, Percent, CircleDotDashed, Palette, ScanText, LucideIcon } from 'lucide-react';
 import { CycleForPriceApproval, submitTemporaryPrice } from '@/src/app/admin/actions/pricing-actions';
 import FloatingLabelInput from '@/src/components/ui/FloatingLabelInput';
 
@@ -84,7 +84,8 @@ function PriceEntry({ cycle, onComplete }: { cycle: CycleForPriceApproval, onCom
   );
 }
 
-const QualityTag = ({ icon: Icon, label, value }: any) => (
+// FIXED: Typed Props
+const QualityTag = ({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string | number | null }) => (
   <div className="flex items-center gap-1.5 text-[11px] text-on-surface-variant">
     <Icon className="w-3 h-3 shrink-0" />
     <span className="font-medium">{label}:</span>

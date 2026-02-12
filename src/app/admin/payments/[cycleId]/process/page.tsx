@@ -1,26 +1,34 @@
-// app/admin/payments/[cycleId]/process/page.tsx
 import { notFound } from "next/navigation";
 import { getFarmerPaymentDetails } from "@/src/lib/payment-data";
 import ProcessPaymentForm from "./ProcessPaymentForm";
 import Link from "next/link";
 import { ArrowLeft, Ban } from "lucide-react";
+import { sql } from "@vercel/postgres"; // [NEW] Standard import for Server Components
 
 type Props = {
-  params: {
+  params: Promise<{
     cycleId: string;
-  };
+  }>;
+};
+
+// [NEW] Type Definition for Bank Accounts
+export type SimplifiedBankAccount = {
+  account_id: number;
+  account_name: string; // This is the Payee Name
+  bank_name: string;
+  account_no: string;
 };
 
 export default async function ProcessPaymentPage({ params }: Props) {
-  const cycleId = Number(params.cycleId);
+  const { cycleId } = await params;
+  const id = Number(cycleId);
 
-  if (isNaN(cycleId)) {
+  if (isNaN(id)) {
     notFound();
   }
 
-  const paymentDetails = await getFarmerPaymentDetails(cycleId);
+  const paymentDetails = await getFarmerPaymentDetails(id);
 
-  // --- ERROR STATE (If cycle not found or not ready) ---
   if (!paymentDetails) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
@@ -34,11 +42,9 @@ export default async function ProcessPaymentPage({ params }: Props) {
           <p className="text-slate-500 text-sm mb-6">
             Cycle{" "}
             <span className="font-mono font-bold bg-slate-100 px-1 rounded">
-              #{cycleId}
+              #{id}
             </span>{" "}
-            could not be retrieved. It may not be in the{" "}
-            <strong>'Loaded'</strong> status or payment might have already been
-            processed.
+            could not be retrieved.
           </p>
           <Link
             href="/admin/dashboard"
@@ -51,11 +57,23 @@ export default async function ProcessPaymentPage({ params }: Props) {
     );
   }
 
-  // --- SUCCESS STATE ---
+  // [NEW] Fetching Payee Names (Bank Accounts) from DB
+  // Logic: Get accounts where farmer_id matches the one in this cycle
+  let farmerBankAccounts: SimplifiedBankAccount[] = [];
+  try {
+    const bankRes = await sql<SimplifiedBankAccount>`
+      SELECT account_id, account_name, bank_name, account_no 
+      FROM bank_accounts 
+      WHERE farmer_id = (SELECT farmer_id FROM crop_cycles WHERE crop_cycle_id = ${id})
+    `;
+    farmerBankAccounts = bankRes.rows;
+  } catch (e) {
+    console.error("Failed to fetch bank accounts", e);
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 p-6 md:p-10 font-sans">
       <div className="max-w-6xl mx-auto space-y-6">
-        {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <Link
@@ -80,8 +98,11 @@ export default async function ProcessPaymentPage({ params }: Props) {
           </div>
         </div>
 
-        {/* The Main Form Component */}
-        <ProcessPaymentForm paymentDetails={paymentDetails} />
+        {/* [UPDATED] Passing the fetched bank accounts to the form */}
+        <ProcessPaymentForm 
+          paymentDetails={paymentDetails} 
+          farmerBankAccounts={farmerBankAccounts} 
+        />
       </div>
     </div>
   );

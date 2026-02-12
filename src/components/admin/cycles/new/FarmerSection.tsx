@@ -1,6 +1,6 @@
-// components/admin/cycles/new/FarmerSection.tsx
 "use client";
-import { useState } from "react";
+
+import React from "react";
 import {
   User,
   Tractor,
@@ -15,18 +15,43 @@ import type { FarmerDetails, Farm, BankAccount } from "@/src/lib/definitions";
 import { Input, Textarea } from "@/src/components/ui/FormInputs";
 import SearchableSelect from "@/src/components/ui/SearchableSelect";
 
+// Same types as before, strictly defined
+export type FarmerData = {
+  id: string;
+  name: string;
+  mobile: string;
+  aadhar: string;
+  address: string;
+};
+
+export type FarmData = {
+  id: string;
+  location: string;
+  area: string;
+  villageId: string;
+};
+
+export type BankAccountState = {
+  id: string;
+  name: string;
+  confirmName: string;
+  number: string;
+  ifsc: string;
+  bankName: string;
+};
+
 type Option = { value: string; label: string };
 
 type Props = {
-  farmerState: [any, Function];
-  farmState: [any, Function];
-  newBankAccounts: any[];
-  setNewBankAccounts: Function;
+  farmerState: [FarmerData, React.Dispatch<React.SetStateAction<FarmerData>>];
+  farmState: [FarmData, React.Dispatch<React.SetStateAction<FarmData>>];
+  newBankAccounts: BankAccountState[];
+  setNewBankAccounts: React.Dispatch<React.SetStateAction<BankAccountState[]>>;
   searchResults: Pick<FarmerDetails, "farmer_id" | "name" | "mobile_number">[];
   isLoading: boolean;
   existingFarms: Farm[];
   existingAccounts: BankAccount[];
-  handleSelectFarmer: (farmer: any) => void;
+  handleSelectFarmer: (farmer: Pick<FarmerDetails, "farmer_id" | "name" | "mobile_number">) => void;
   handleClear: () => void;
   isSearchEnabled: boolean;
   setIsSearchEnabled: (enabled: boolean) => void;
@@ -69,28 +94,31 @@ export const FarmerSection = ({
   const [farmerData, setFarmerData] = farmerState;
   const [farmData, setFarmData] = farmState;
 
-  const handleFarmerChange = (e: React.ChangeEvent<any>) => {
-    setFarmerData((prev: any) => ({
+  const handleFarmerChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setFarmerData((prev) => ({
       ...prev,
-      [e.target.name]: e.target.value,
+      [name]: value,
     }));
   };
 
-  const handleFarmChange = (e: React.ChangeEvent<any>) => {
-    setFarmData((prev: any) => ({ ...prev, [e.target.name]: e.target.value }));
+  const handleFarmChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setFarmData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleNewBankChange = (index: number, e: React.ChangeEvent<any>) => {
+  const handleNewBankChange = (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
     const newAccounts = [...newBankAccounts];
     newAccounts[index] = {
       ...newAccounts[index],
-      [e.target.name]: e.target.value,
+      [name]: value,
     };
     setNewBankAccounts(newAccounts);
   };
 
   const removeBankAccount = (indexToRemove: number) => {
-    setNewBankAccounts((prev: any[]) =>
+    setNewBankAccounts((prev) =>
       prev.filter((_, index) => index !== indexToRemove),
     );
   };
@@ -117,6 +145,10 @@ export const FarmerSection = ({
 
   return (
     <div className="flex flex-col gap-6">
+      {/* ... Content remains same, stripped of error lines ... */}
+      {/* This component is large, assuming you have the JSX from previous step but needed 'any' fix */}
+      {/* I am returning the FULL corrected file to be safe */}
+      
       {/* --- Farmer Details Section --- */}
       <div className="bg-surface-container rounded-[1.75rem] p-6 shadow-md">
         <div className="flex items-center justify-between gap-4 mb-6">
@@ -260,7 +292,7 @@ export const FarmerSection = ({
               options={villageOptions}
               value={farmData.villageId}
               onChange={(value: string) =>
-                setFarmData((prev: any) => ({ ...prev, villageId: value }))
+                setFarmData((prev) => ({ ...prev, villageId: value }))
               }
             />
             <Input
@@ -270,7 +302,7 @@ export const FarmerSection = ({
               label="Area of Farm (Vigha)"
               value={farmData.area}
               onChange={handleFarmChange}
-              onWheel={(e) => e.currentTarget.blur()}
+              onWheel={(e: React.WheelEvent<HTMLInputElement>) => e.currentTarget.blur()}
               required
             />
             <Textarea
@@ -356,7 +388,6 @@ export const FarmerSection = ({
         {(!isExistingFarmer || showNewBankAccountForm) && (
           <>
             {newBankAccounts.map((account, index) => {
-              // Check mismatch
               const isMismatch =
                 account.name &&
                 account.confirmName &&
@@ -390,7 +421,6 @@ export const FarmerSection = ({
                       required
                     />
 
-                    {/* CONFIRM NAME INPUT */}
                     <div className="relative">
                       <Input
                         type="text"

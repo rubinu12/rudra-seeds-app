@@ -12,6 +12,7 @@ import {
   Star,
   MapPin,
   Filter,
+  LucideIcon,
 } from "lucide-react";
 import { MODERN_THEMES } from "@/src/app/employee/theme";
 import { GUJARATI } from "@/src/app/employee/translations";
@@ -19,7 +20,7 @@ import {
   saveDefaultLocation,
   getDefaultLocation,
 } from "@/src/app/employee/actions/user";
-import { getAllVillages } from "@/src/app/employee/actions/shipments"; // Reuse the village fetcher
+import { getAllVillages } from "@/src/app/employee/actions/shipments";
 
 type Props = {
   location: string;
@@ -28,7 +29,6 @@ type Props = {
   setActiveTab: (tab: string) => void;
   searchTerm: string;
   setSearchTerm: (term: string) => void;
-  // New Props
   selectedVillage: string;
   setSelectedVillage: (v: string) => void;
 };
@@ -57,7 +57,6 @@ export default function SmartHeader({
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Village Logic
   const [showVillagePicker, setShowVillagePicker] = useState(false);
   const [allVillages, setAllVillages] = useState<string[]>([]);
   const [villageSearch, setVillageSearch] = useState("");
@@ -67,7 +66,6 @@ export default function SmartHeader({
 
   const theme = MODERN_THEMES[location] || MODERN_THEMES["Farm"];
 
-  // 1. Load Defaults & Villages
   useEffect(() => {
     getDefaultLocation().then((loc) => {
       if (loc) setDefaultLoc(loc);
@@ -82,7 +80,6 @@ export default function SmartHeader({
       const parsed = JSON.parse(cached);
       if (now - parsed.timestamp < CACHE_DURATION) {
         setAllVillages(parsed.data);
-        // Background refresh
         getAllVillages().then((fresh) => {
             if(JSON.stringify(fresh) !== JSON.stringify(parsed.data)) {
                 setAllVillages(fresh);
@@ -110,10 +107,8 @@ export default function SmartHeader({
       {!isSearchOpen && !searchTerm ? (
         <div className="flex justify-between items-center gap-3">
           
-          {/* LEFT: FILTERS */}
           <div className="flex items-center gap-2 flex-1 min-w-0">
             
-            {/* 1. Location Dropdown */}
             <div className="relative" ref={dropdownRef}>
               <button
                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
@@ -147,7 +142,6 @@ export default function SmartHeader({
                       );
                     })}
                   </div>
-                  {/* Default Toggle Footer */}
                   <div className="border-t border-slate-100 bg-slate-50 p-3 flex justify-between items-center">
                       <span className="text-[10px] font-bold text-slate-500 uppercase flex gap-1"><Star className="w-3 h-3"/> Default</span>
                       <button 
@@ -163,7 +157,6 @@ export default function SmartHeader({
               )}
             </div>
 
-            {/* 2. Village Filter (Only for Farm) */}
             {location === "Farm" && (
                 <div className="relative">
                     <button
@@ -216,7 +209,6 @@ export default function SmartHeader({
             )}
           </div>
 
-          {/* RIGHT: SEARCH */}
           <button
             onClick={() => setIsSearchOpen(true)}
             className="flex-shrink-0 w-10 h-10 bg-white/60 rounded-full shadow-sm border border-black/5 flex items-center justify-center text-slate-600 active:scale-95 transition-transform"
@@ -225,7 +217,6 @@ export default function SmartHeader({
           </button>
         </div>
       ) : (
-        // Search Mode
         <div className="flex gap-2 items-center animate-in zoom-in-95 duration-200 h-[52px]">
           <div className="flex-grow h-10 bg-white rounded-xl border border-slate-200 flex items-center px-3 shadow-sm">
             <Search className="w-4 h-4 text-slate-400 mr-2" />
@@ -244,13 +235,13 @@ export default function SmartHeader({
         </div>
       )}
 
-      {/* Tabs */}
       {!isSearchOpen && !searchTerm && (
         <div className="flex justify-between mt-4 overflow-x-auto no-scrollbar gap-2">
           {["sample", "weigh", "load"].map((id) => {
             const isActive = activeTab === id;
-            const icons: any = { sample: Beaker, weigh: Scale, load: Truck };
-            const labels: any = {
+            // FIXED: Typed dictionaries
+            const icons: Record<string, LucideIcon> = { sample: Beaker, weigh: Scale, load: Truck };
+            const labels: Record<string, string> = {
               sample: GUJARATI.tab_sample,
               weigh: GUJARATI.tab_weigh,
               load: GUJARATI.tab_load,

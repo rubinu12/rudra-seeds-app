@@ -1,10 +1,9 @@
-// components/admin/harvesting/SelectPaymentCycleModal.tsx
 "use client";
 
 import React, { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Modal from "@/src/components/ui/Modal";
-import { CycleForPaymentSelection } from "@/src/lib/payment-data"; // Adjust path if needed
+import { CycleForPaymentSelection } from "@/src/app/admin/payments/actions";
 import {
   Wheat,
   User,
@@ -12,14 +11,13 @@ import {
   Package,
   ChevronRight,
   LoaderCircle,
-  IndianRupee,
 } from "lucide-react";
 
 type SelectPaymentCycleModalProps = {
   isOpen: boolean;
   onClose: () => void;
   cycles: CycleForPaymentSelection[];
-  isLoading?: boolean; // Optional loading state from parent
+  isLoading?: boolean;
 };
 
 export default function SelectPaymentCycleModal({
@@ -36,7 +34,7 @@ export default function SelectPaymentCycleModal({
     setIsNavigatingId(cycleId);
     startTransition(() => {
       router.push(`/admin/payments/${cycleId}/process`);
-      onClose(); // Close modal upon initiating navigation
+      onClose();
     });
   };
 
@@ -47,8 +45,6 @@ export default function SelectPaymentCycleModal({
       title="Select Cycle for Farmer Payment"
       maxWidth="max-w-xl"
     >
-      {" "}
-      {/* Adjusted width */}
       <div className="space-y-3">
         {isLoading ? (
           <div className="flex justify-center items-center py-8">
@@ -65,7 +61,6 @@ export default function SelectPaymentCycleModal({
               disabled={isPending}
               className="w-full flex justify-between items-center p-4 rounded-xl bg-surface hover:bg-surface-variant/60 border border-outline/20 transition-colors group shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-70 disabled:cursor-not-allowed"
             >
-              {/* Left side content */}
               <div className="flex-grow min-w-0 text-left space-y-1">
                 <p className="font-semibold text-on-surface text-base truncate flex items-center gap-1.5">
                   <User className="w-4 h-4 text-primary flex-shrink-0" />
@@ -84,13 +79,11 @@ export default function SelectPaymentCycleModal({
                   </span>
                 </div>
               </div>
-              {/* Right side action */}
               <div className="flex items-center gap-1 text-primary flex-shrink-0">
                 {isNavigatingId === cycle.crop_cycle_id ? (
                   <LoaderCircle className="w-5 h-5 animate-spin" />
                 ) : (
                   <>
-                    {/* <IndianRupee className="w-4 h-4" /> */}
                     <span className="text-sm font-medium hidden sm:inline group-hover:underline">
                       Process Payment
                     </span>
@@ -102,7 +95,7 @@ export default function SelectPaymentCycleModal({
           ))
         ) : (
           <p className="text-center text-on-surface-variant py-8">
-            No cycles found with 'Loaded' status ready for payment.
+            No cycles found with &apos;Loaded&apos; status ready for payment.
           </p>
         )}
       </div>

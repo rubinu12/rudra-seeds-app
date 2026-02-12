@@ -17,7 +17,6 @@ export type ActiveShipment = {
   allowed_seed_ids: number[];
   seed_varieties: string[];
   location: string;
-  // NEW: Added village_name to display in UI
   village_name?: string; 
   company_name: string;
 };
@@ -38,7 +37,6 @@ export type FarmerStock = {
 // 2. MASTER DATA FETCHERS
 // ==============================================================================
 
-// --- NEW: FETCH ALL VILLAGES (For Dropdowns) ---
 export async function getAllVillages() {
   try {
     const res = await sql`
@@ -48,21 +46,18 @@ export async function getAllVillages() {
       ORDER BY village_name ASC
     `;
     return res.rows.map((r) => r.village_name);
-  } catch (e) {
+  } catch (_e) {
     return [];
   }
 }
 
-// --- FETCH ALL MASTER DATA FOR MODAL ---
 export async function getShipmentMasterData() {
   try {
-    // Run all queries in parallel for performance
     const [seeds, transportCos, destCos, landmarks, villages] = await Promise.all([
       sql`SELECT seed_id, variety_name FROM seeds WHERE is_active = TRUE ORDER BY variety_name`,
       sql`SELECT company_id as id, company_name as name FROM shipment_companies WHERE is_active = TRUE ORDER BY company_name`,
       sql`SELECT dest_company_id as id, company_name as name FROM destination_companies WHERE is_active = TRUE ORDER BY company_name`,
       sql`SELECT landmark_id as id, landmark_name as name FROM landmarks WHERE is_active = TRUE ORDER BY landmark_name`,
-      // Fetch Villages with ID and Name
       sql`SELECT village_id as id, village_name as name FROM villages WHERE is_active = TRUE ORDER BY village_name`
     ]);
 
@@ -73,8 +68,8 @@ export async function getShipmentMasterData() {
       landmarks: landmarks.rows,
       villages: villages.rows
     };
-  } catch (e) {
-    console.error("Master Data Fetch Error:", e);
+  } catch (error) {
+    console.error("Master Data Fetch Error:", error);
     return { seeds: [], transportCos: [], destCos: [], landmarks: [], villages: [] };
   }
 }
@@ -91,25 +86,18 @@ export async function createShipment(formData: FormData) {
     return { success: false, message: "Unauthorized: Employee ID missing" };
   }
 
-  // --- Extract Data ---
   const capacityTonnes = Number(formData.get("capacity"));
   const vehicleNo = formData.get("vehicleNo");
   const transportId = formData.get("transportId");
   const destId = formData.get("destId");
   const location = formData.get("location") as string;
-  
-  // Landmark (Optional)
   const landmarkIdRaw = formData.get("landmarkId");
   const landmarkId = landmarkIdRaw ? Number(landmarkIdRaw) : null;
-
-  // Village (Conditional based on location)
   const villageIdRaw = formData.get("villageId");
   const villageId = villageIdRaw ? Number(villageIdRaw) : null;
-
   const driverName = formData.get("driverName");
   const driverMobile = formData.get("driverMobile");
 
-  // --- Process Seeds ---
   let seedIds: number[] = [];
   const rawSeeds = formData.get("seedIds");
   try {
@@ -118,7 +106,7 @@ export async function createShipment(formData: FormData) {
     } else {
       seedIds = formData.getAll("seedIds").map((id) => Number(id));
     }
-  } catch (e) {
+  } catch (_e) {
     return { success: false, message: "Invalid seed selection" };
   }
 
@@ -126,25 +114,20 @@ export async function createShipment(formData: FormData) {
     return { success: false, message: "Select at least one seed variety" };
   }
 
-  // Format array for SQL: e.g., "{101,102}"
   const seedArrayLiteral = `{${seedIds.join(",")}}`;
   const targetBags = Math.ceil(capacityTonnes * 20);
 
-  // --- Insert into Database ---
   try {
-    // Debug Log
-    console.log(`🚚 Creating Shipment [${vehicleNo}] at ${location}. VillageID: ${villageId}`);
-
     await sql`
             INSERT INTO shipments (
                 vehicle_number, capacity_in_tonnes, target_bag_capacity, allowed_seed_ids, 
-                shipment_company_id, dest_company_id, location, landmark_id, village_id, -- Added Column
+                shipment_company_id, dest_company_id, location, landmark_id, village_id, 
                 driver_name, driver_mobile, status, total_bags, creation_date, 
                 is_company_payment_received, created_by
             ) VALUES (
                 ${vehicleNo as string}, ${capacityTonnes}, ${targetBags}, ${seedArrayLiteral}::int[], 
                 ${Number(transportId)}, ${Number(destId)}, ${location}, 
-                ${landmarkId}, ${villageId}, -- Added Value
+                ${landmarkId}, ${villageId}, 
                 ${driverName as string}, ${driverMobile as string}, 'Loading', 0, NOW(), 
                 FALSE, ${userId}
             )
@@ -162,7 +145,6 @@ export async function createShipment(formData: FormData) {
 // 4. SHIPMENT RETRIEVAL (READ)
 // ==============================================================================
 
-// --- GET ACTIVE SHIPMENTS (For Dashboard) ---
 export async function getActiveShipments(): Promise<ActiveShipment[]> {
   try {
     const res = await sql`
@@ -170,14 +152,11 @@ export async function getActiveShipments(): Promise<ActiveShipment[]> {
                 s.shipment_id, s.vehicle_number, s.status, 
                 s.total_bags, s.target_bag_capacity, s.allowed_seed_ids, s.location,
                 COALESCE(sc.company_name, 'Unknown Transport') as company_name,
-                
-                -- NEW: Fetch Village Name
                 v.village_name,
-
                 ARRAY(SELECT variety_name FROM seeds WHERE seed_id = ANY(s.allowed_seed_ids)) as seed_varieties
             FROM shipments s
             LEFT JOIN shipment_companies sc ON s.shipment_company_id = sc.company_id
-            LEFT JOIN villages v ON s.village_id = v.village_id -- JOIN to get Name
+            LEFT JOIN villages v ON s.village_id = v.village_id
             WHERE s.status = 'Loading'
             ORDER BY s.creation_date DESC
         `;
@@ -188,7 +167,6 @@ export async function getActiveShipments(): Promise<ActiveShipment[]> {
   }
 }
 
-// --- GET SINGLE SHIPMENT (For Details Page) ---
 export async function getShipmentById(id: number): Promise<ActiveShipment | null> {
   try {
     const res = await sql`
@@ -196,23 +174,19 @@ export async function getShipmentById(id: number): Promise<ActiveShipment | null
                 s.shipment_id, s.vehicle_number, s.status, 
                 s.total_bags, s.target_bag_capacity, s.allowed_seed_ids, s.location,
                 COALESCE(sc.company_name, 'Unknown Transport') as company_name,
-                
-                -- NEW: Fetch Village Name
                 v.village_name,
-
                 ARRAY(SELECT variety_name FROM seeds WHERE seed_id = ANY(s.allowed_seed_ids)) as seed_varieties
             FROM shipments s
             LEFT JOIN shipment_companies sc ON s.shipment_company_id = sc.company_id
-            LEFT JOIN villages v ON s.village_id = v.village_id -- JOIN to get Name
+            LEFT JOIN villages v ON s.village_id = v.village_id
             WHERE s.shipment_id = ${id}
         `;
     return res.rows[0] as ActiveShipment;
-  } catch (e) {
+  } catch (_e) {
     return null;
   }
 }
 
-// --- GET MANIFEST (Loaded Items List) ---
 export async function getShipmentManifest(shipmentId: number) {
   try {
     const res = await sql`
@@ -235,7 +209,7 @@ export async function getShipmentManifest(shipmentId: number) {
       ORDER BY si.added_at DESC
     `;
     return res.rows;
-  } catch (e) {
+  } catch (_e) {
     return [];
   }
 }
@@ -244,7 +218,6 @@ export async function getShipmentManifest(shipmentId: number) {
 // 5. LOADING OPERATIONS (WRITE)
 // ==============================================================================
 
-// --- GET AVAILABLE FARMER STOCK ---
 export async function getFarmersForLoading(): Promise<FarmerStock[]> {
   try {
     const res = await sql`
@@ -268,12 +241,11 @@ export async function getFarmersForLoading(): Promise<FarmerStock[]> {
             ORDER BY cc.crop_cycle_id DESC
         `;
     return res.rows as FarmerStock[];
-  } catch (e) {
+  } catch (_e) {
     return [];
   }
 }
 
-// --- ADD BAGS TO SHIPMENT (Transaction) ---
 export async function addBagsToShipment(
   shipmentId: number,
   cycleId: number,
@@ -285,25 +257,44 @@ export async function addBagsToShipment(
   if (!userId) return { success: false, message: "Unauthorized" };
 
   try {
-    // 1. Verify Stock
-    const check =
-      await sql`SELECT bags_remaining_to_load FROM crop_cycles WHERE crop_cycle_id = ${cycleId}`;
+    // 1. Fetch Shipment & Farmer Stock in Parallel
+    const [shipmentRes, check] = await Promise.all([
+      sql`SELECT total_bags, target_bag_capacity FROM shipments WHERE shipment_id = ${shipmentId}`,
+      sql`SELECT bags_remaining_to_load FROM crop_cycles WHERE crop_cycle_id = ${cycleId}`
+    ]);
+
+    if (shipmentRes.rowCount === 0) return { success: false, message: "Shipment not found" };
+    
+    // --- [BUG FIX START] ---
+    const { total_bags, target_bag_capacity } = shipmentRes.rows[0];
+    
+    // Define the Margin (Must match UI)
+    const MARGIN = 50; 
+    const maxAllowed = target_bag_capacity + MARGIN;
+    const newTotal = total_bags + bagsToAdd;
+
+    // Strict Server-Side Validation
+    if (newTotal > maxAllowed) {
+      return { 
+        success: false, 
+        message: `Capacity Exceeded! Max allowed is ${maxAllowed} bags (Target ${target_bag_capacity} + 50 Margin).` 
+      };
+    }
+    // --- [BUG FIX END] ---
+
     if (bagsToAdd > (check.rows[0]?.bags_remaining_to_load || 0)) {
-      return { success: false, message: "Not enough bags available" };
+      return { success: false, message: "Not enough bags available with farmer" };
     }
 
     await sql`BEGIN`;
 
-    // 2. Create Shipment Item Record
     await sql`
             INSERT INTO shipment_items (shipment_id, crop_cycle_id, bags_loaded, added_at, loaded_by) 
             VALUES (${shipmentId}, ${cycleId}, ${bagsToAdd}, NOW(), ${userId})
         `;
 
-    // 3. Update Shipment Total
     await sql`UPDATE shipments SET total_bags = total_bags + ${bagsToAdd} WHERE shipment_id = ${shipmentId}`;
 
-    // 4. Update Farmer Stock Status
     const newRem = check.rows[0].bags_remaining_to_load - bagsToAdd;
     const newStatus = newRem === 0 ? "Loaded" : "Loading";
 
@@ -317,13 +308,11 @@ export async function addBagsToShipment(
     await sql`COMMIT`;
     revalidatePath(`/employee/shipment/${shipmentId}`);
     return { success: true };
-  } catch (e) {
+  } catch (_e) {
     await sql`ROLLBACK`;
     return { success: false, message: "Transaction Failed" };
   }
 }
-
-// --- UNDO LAST LOAD (Revert Transaction) ---
 export async function undoLastLoad(
   shipmentId: number,
   cycleId: number,
@@ -332,7 +321,6 @@ export async function undoLastLoad(
   try {
     await sql`BEGIN`;
 
-    // 1. Find and Delete the specific item
     await sql`
             DELETE FROM shipment_items 
             WHERE item_id = (
@@ -343,10 +331,8 @@ export async function undoLastLoad(
             )
         `;
 
-    // 2. Revert Shipment Total
     await sql`UPDATE shipments SET total_bags = total_bags - ${bagsToRevert} WHERE shipment_id = ${shipmentId}`;
 
-    // 3. Return Stock to Farmer
     await sql`
             UPDATE crop_cycles 
             SET bags_remaining_to_load = bags_remaining_to_load + ${bagsToRevert}, status = 'Weighed'
@@ -356,24 +342,20 @@ export async function undoLastLoad(
     await sql`COMMIT`;
     revalidatePath(`/employee/shipment/${shipmentId}`);
     return { success: true };
-  } catch (e) {
+  } catch (_e) {
     await sql`ROLLBACK`;
     return { success: false, message: "Undo failed" };
   }
 }
 
-// --- REMOVE SPECIFIC ITEM (By Item ID) ---
 export async function removeShipmentItem(itemId: number, shipmentId: number, cycleId: number, bags: number) {
   try {
     await sql`BEGIN`;
 
-    // 1. Delete the item
     await sql`DELETE FROM shipment_items WHERE item_id = ${itemId}`;
 
-    // 2. Reduce Shipment Total
     await sql`UPDATE shipments SET total_bags = total_bags - ${bags} WHERE shipment_id = ${shipmentId}`;
 
-    // 3. Return Stock to Farmer & Revert Status
     await sql`
       UPDATE crop_cycles 
       SET bags_remaining_to_load = bags_remaining_to_load + ${bags}, 
@@ -384,15 +366,11 @@ export async function removeShipmentItem(itemId: number, shipmentId: number, cyc
     await sql`COMMIT`;
     revalidatePath(`/employee/shipment/${shipmentId}`);
     return { success: true };
-  } catch (e) {
+  } catch (_e) {
     await sql`ROLLBACK`;
     return { success: false, message: "Failed to remove item" };
   }
 }
-
-// ==============================================================================
-// 6. CONFIRMATION
-// ==============================================================================
 
 export async function markShipmentAsFilled(shipmentId: number) {
   const session = await auth();
@@ -408,7 +386,6 @@ export async function markShipmentAsFilled(shipmentId: number) {
 
     const diff = total_bags - target_bag_capacity;
 
-    // Validation (Can be adjusted)
     if (diff < -50) {
       return {
         success: false,

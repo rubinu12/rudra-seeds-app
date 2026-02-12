@@ -2,7 +2,7 @@
 
 import React, { useState, useActionState } from "react";
 import { authenticate, signUp } from "@/src/app/auth/actions";
-import { Wheat, Loader2, AlertCircle, UserPlus, LogIn } from "lucide-react";
+import { Wheat, Loader2, AlertCircle, UserPlus, LogIn, LucideIcon } from "lucide-react";
 import { useFormStatus } from "react-dom";
 
 export default function AuthPage() {
@@ -118,7 +118,17 @@ export default function AuthPage() {
   );
 }
 
-function FloatingInput({ name, label, type, placeholder, error }: any) {
+// --- TYPED SUB-COMPONENTS ---
+
+type FloatingInputProps = {
+    name: string;
+    label: string;
+    type: string;
+    placeholder: string;
+    error?: string;
+};
+
+function FloatingInput({ name, label, type, placeholder, error }: FloatingInputProps) {
   return (
     <div>
       <label className="mb-1 block text-xs font-bold uppercase text-slate-500">
@@ -135,7 +145,12 @@ function FloatingInput({ name, label, type, placeholder, error }: any) {
   );
 }
 
-function SubmitButton({ text, icon: Icon }: any) {
+type SubmitButtonProps = {
+    text: string;
+    icon: LucideIcon;
+};
+
+function SubmitButton({ text, icon: Icon }: SubmitButtonProps) {
   const { pending } = useFormStatus();
   return (
     <button
