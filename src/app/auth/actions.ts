@@ -2,7 +2,7 @@
 
 import { sql } from '@vercel/postgres';
 import { z } from 'zod';
-import bcrypt from 'bcrypt';
+import { hash } from 'bcryptjs'; // [UPDATED] Using bcryptjs
 import { signIn } from '@/auth';
 import { AuthError } from 'next-auth';
 
@@ -56,8 +56,8 @@ export async function signUp(prevState: FormState | undefined, formData: FormDat
     const { name, email, mobile, password, role } = validatedFields.data;
 
     try {
-        // 2. Hash Password
-        const hashedPassword = await bcrypt.hash(password, 10);
+        // 2. Hash Password ([UPDATED] using bcryptjs)
+        const hashedPassword = await hash(password, 10);
 
         // 3. Insert into Database
         await sql`
