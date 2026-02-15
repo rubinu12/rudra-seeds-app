@@ -15,7 +15,8 @@ import {
   CheckCircle,
   Calculator,
   AlertCircle,
-  Landmark // Icon for Bank
+  Landmark,
+  Edit3 
 } from "lucide-react";
 import { FarmerPaymentDetails } from "@/src/lib/payment-data";
 import { useFormStatus } from "react-dom";
@@ -52,15 +53,21 @@ export default function ProcessPaymentForm({
   const [dueDays, setDueDays] = useState(22);
   const [chequeEntries, setChequeEntries] = useState<ChequeEntry[]>([]);
 
+  // --- Price Adjustment Logic ---
+  const initialRatePerKg = (paymentDetails.purchase_rate || 0) / 20;
+  const [ratePerKg, setRatePerKg] = useState(initialRatePerKg);
+
+  const bags = paymentDetails.quantity_in_bags || 0;
+  const deduction = paymentDetails.amount_remaining || 0; 
+
+  const grossTotal = ratePerKg * 50 * bags;
+  const netPayable = grossTotal - deduction;
+
   // Inputs
-  // [REMOVED] Bill Number State
   const [newPayee, setNewPayee] = useState(paymentDetails.farmer_name);
   const [newChequeNo, setNewChequeNo] = useState("");
   const [newAmount, setNewAmount] = useState("");
   const [newDueDate, setNewDueDate] = useState(""); 
-
-  const grossTotal = useMemo(() => paymentDetails.gross_payment || 0, [paymentDetails]);
-  const netPayable = paymentDetails.net_payment || 0;
 
   const totalChequeAmount = useMemo(
     () => chequeEntries.reduce((sum, c) => sum + (parseFloat(c.amount) || 0), 0),
@@ -100,7 +107,6 @@ export default function ProcessPaymentForm({
     if (remainingAmount > 0) setNewAmount(remainingAmount.toFixed(2));
   };
 
-  // Handle Bank Account Selection to Auto-fill Payee
   const handleAccountSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const selectedId = Number(e.target.value);
     const account = farmerBankAccounts.find(acc => acc.account_id === selectedId);
@@ -132,6 +138,29 @@ export default function ProcessPaymentForm({
           </div>
         </div>
 
+        {/* RATE ADJUSTMENT INPUT */}
+        <div className="mb-6 bg-yellow-50 p-4 rounded-xl border border-yellow-200">
+            <label className="text-xs font-bold uppercase text-yellow-700 mb-1 flex items-center gap-2">
+                <Edit3 className="w-3 h-3"/> Adjust Rate (₹ / Kg)
+            </label>
+            <div className="flex items-center gap-2">
+                <input 
+                    type="number" 
+                    step="0.01"
+                    value={ratePerKg}
+                    onChange={(e) => setRatePerKg(Number(e.target.value))}
+                    className="w-full text-2xl font-black text-slate-900 bg-transparent border-b-2 border-yellow-300 focus:border-yellow-600 outline-none"
+                />
+                <span className="text-xs font-bold text-yellow-600 whitespace-nowrap">
+                   Original: ₹{(paymentDetails.purchase_rate || 0) / 20}/kg
+                </span>
+            </div>
+            <p className="text-[10px] text-slate-500 mt-1">
+                Changing this updates the total automatically. <br/>
+                (1 Bag = 50kg)
+            </p>
+        </div>
+
         <div className="space-y-4">
           <div className="flex justify-between items-center pb-4 border-b border-slate-100">
             <span className="text-slate-500 font-medium text-sm">Total Goods Value</span>
@@ -139,7 +168,7 @@ export default function ProcessPaymentForm({
           </div>
           <div className="flex justify-between items-center pb-4 border-b border-slate-100">
             <span className="text-slate-500 font-medium text-sm">Less: Advance / Ded.</span>
-            <span className="font-bold text-red-600">- ₹{formatRupee(grossTotal - netPayable)}</span>
+            <span className="font-bold text-red-600">- ₹{formatRupee(deduction)}</span>
           </div>
           <div className="bg-slate-900 rounded-2xl p-5 text-white">
             <p className="text-slate-400 text-xs font-bold uppercase mb-1">Net Payable Amount</p>
@@ -214,7 +243,7 @@ export default function ProcessPaymentForm({
           {/* Input Row */}
           <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end mb-6 p-4 bg-slate-50 rounded-2xl border border-slate-100">
             
-            {/* Bank Selector with Auto-Fill Logic */}
+            {/* Bank Selector */}
             {farmerBankAccounts.length > 0 && (
               <div className="md:col-span-12 mb-2">
                  <label className="text-[10px] font-bold uppercase text-blue-600 pl-1 flex items-center gap-1">
@@ -254,7 +283,9 @@ export default function ProcessPaymentForm({
                 className="w-full p-2.5 rounded-lg border border-slate-200 text-sm font-bold font-mono focus:ring-2 focus:ring-black outline-none"
               />
             </div>
-            <div className="md:col-span-3">
+            
+            {/* [UPDATED] Decreased Due Date Width (md:col-span-3 -> md:col-span-2) */}
+            <div className="md:col-span-2">
               <label className="text-[10px] font-bold uppercase text-slate-400 pl-1">Due Date</label>
               <input
                 type="date"
@@ -263,7 +294,9 @@ export default function ProcessPaymentForm({
                 className="w-full p-2.5 rounded-lg border border-slate-200 text-sm font-bold focus:ring-2 focus:ring-black outline-none"
               />
             </div>
-            <div className="md:col-span-2">
+
+            {/* [UPDATED] Increased Amount Width (md:col-span-2 -> md:col-span-3) */}
+            <div className="md:col-span-3">
               <label className="text-[10px] font-bold uppercase text-slate-400 pl-1 flex justify-between">
                 Amount
                 {remainingAmount > 0 && (
@@ -283,6 +316,7 @@ export default function ProcessPaymentForm({
                 />
               </div>
             </div>
+
             <div className="md:col-span-2">
               <button
                 type="button"
@@ -329,6 +363,7 @@ export default function ProcessPaymentForm({
               ))}
             </div>
           )}
+
         </div>
 
         {/* 4. Submit Area */}

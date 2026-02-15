@@ -40,6 +40,7 @@ type ShipmentBillData = {
     village_name: string;
     lot_no: string;
     bags: number;
+    purchase_rate?: number; // [UPDATED] Added this field
   }>;
 };
 
@@ -77,12 +78,19 @@ export default function ShipmentBillPage() {
           );
           setAtCity(data.shipment.dest_city || "");
 
-          const initialRows: BillRow[] = data.items.map((item) => ({
-            ...item,
-            weight: item.bags * 50,
-            rate: 28, // Default Rate
-            amount: item.bags * 50 * 28,
-          }));
+          // [UPDATED] Calculation Logic
+          const initialRows: BillRow[] = data.items.map((item) => {
+             const weight = item.bags * 50;
+             // Logic: DB Rate (per 20kg) / 20 = Rate per Kg. Default to 0 if missing.
+             const ratePerKg = item.purchase_rate ? (Number(item.purchase_rate) / 20) : 0;
+             
+             return {
+               ...item,
+               weight: weight,
+               rate: ratePerKg, 
+               amount: weight * ratePerKg,
+             };
+          });
           setRows(initialRows);
         }
         setLoading(false);
@@ -312,7 +320,7 @@ export default function ShipmentBillPage() {
               <th className="border border-black p-1 w-12">Bags</th>
               <th className="border border-black p-1 w-16">Weight (Kg)</th>
               <th className="border border-black p-1 w-16 bg-blue-50 print:bg-transparent">
-                Rate
+                Rate (₹)
               </th>
               <th className="border border-black p-1 w-24">Amount (₹)</th>
             </tr>
@@ -335,6 +343,7 @@ export default function ShipmentBillPage() {
                 <td className="border border-black p-0 bg-blue-50/30 print:bg-transparent">
                   <input
                     type="number"
+                    step="0.01"
                     value={row.rate}
                     onChange={(e) => handleRateChange(idx, e.target.value)}
                     className="w-full h-full text-center bg-transparent focus:outline-none focus:bg-blue-100 font-medium"
@@ -344,6 +353,7 @@ export default function ShipmentBillPage() {
                 <td className="border border-black p-1 text-right pr-2 font-medium">
                   {row.amount.toLocaleString("en-IN", {
                     minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
                   })}
                 </td>
               </tr>
@@ -364,6 +374,7 @@ export default function ShipmentBillPage() {
               <td className="border border-black p-1.5 text-right pr-2 text-sm">
                 {grandTotalAmount.toLocaleString("en-IN", {
                   minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
                 })}
               </td>
             </tr>

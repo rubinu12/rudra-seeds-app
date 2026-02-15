@@ -253,7 +253,7 @@ export default function PrintChequeClient({
           <div className="payee-field">{` ${currentCheque.payee_name} `}</div>
           <div className="amount-words-1">{amountInWords.line1}</div>
           <div className="amount-words-2">{amountInWords.line2}</div>
-          <div className="amount-figures">{`** ${currentCheque.amount.toFixed(2)} /-`}</div>
+          <div className="amount-figures">{` ${currentCheque.amount.toFixed(2)} /-`}</div>
         </div>
       </div>
 
@@ -334,7 +334,7 @@ export default function PrintChequeClient({
         /* EXACT field positioning and styles from cheque-test */
         .date-field {
           position: absolute;
-          top: 7mm;
+          top: 6mm;
           left: 159mm;
           letter-spacing: 3mm;
           font-weight: bold;
@@ -342,7 +342,7 @@ export default function PrintChequeClient({
         } /* Adjusted font size */
         .payee-field {
           position: absolute;
-          top: 21mm;
+          top: 20mm;
           left: 19mm;
           font-weight: bold;
           font-size: 14px;

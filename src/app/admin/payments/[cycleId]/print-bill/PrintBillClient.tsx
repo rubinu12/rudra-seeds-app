@@ -300,6 +300,19 @@ export default function PrintBillClient({ billData }: PrintBillClientProps) {
         }
 
         @media print {
+          /* --- THE FIX: VISIBILITY INSTEAD OF DISPLAY --- */
+          /* Hide everything in the body first */
+          body * {
+            visibility: hidden;
+          }
+
+          /* Unhide ONLY the bill container and its children */
+          .bill-container,
+          .bill-container * {
+            visibility: visible;
+          }
+
+          /* --- PAGE SETUP --- */
           body {
             margin: 0;
             padding: 0;
@@ -307,43 +320,54 @@ export default function PrintBillClient({ billData }: PrintBillClientProps) {
             font-size: 10pt;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
+            overflow: hidden; /* Prevents scrollbars from printing */
           }
+
+          /* Ensure the wrapper doesn't mess up layout */
+          html, body {
+            height: auto;
+          }
+
+          /* Hide controls explicitly */
           .controls {
             display: none !important;
           }
+
+          /* --- BILL POSITIONING --- */
           .bill-container {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%; /* Ensure full width */
             margin: 0 !important;
             padding: 0 !important;
             border: none !important;
-            width: auto !important;
+            background: white;
           }
-          body > *:not(.bill-container) {
-            display: none;
-          }
-          html,
-          body {
-            height: auto;
-          }
+
+          /* --- YOUR CUSTOM STYLES (PRESERVED) --- */
           .bill-a4 {
-            position: absolute !important;
-            top: 0 !important;
-            left: 0 !important;
+            /* We don't need absolute here if container is absolute, 
+               but keeping margins/padding logic is safe */
             width: 210mm;
-            height: 297mm;
+            min-height: 297mm; /* Changed to min-height for safety */
             margin: 0 !important;
-            padding: 10mm !important;
+            padding: 10mm !important; 
             border: none !important;
             box-shadow: none !important;
             font-size: 10pt;
           }
+
           .bill-table th,
           .bill-table td {
             border-color: black !important;
             padding: 3px 5px;
           }
+
           .bill-info span {
             min-width: 48%;
           }
+
           .signature-area {
             border-top: 1px solid black;
           }

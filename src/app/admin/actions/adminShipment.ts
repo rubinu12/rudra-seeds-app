@@ -148,11 +148,13 @@ export async function getShipmentBillData(shipmentId: number) {
             WHERE s.shipment_id = ${shipmentId}
         `;
 
+    // [UPDATED] Added cc.purchase_rate to this query
     const itemsRes = await sql`
             SELECT 
                 f.name as farmer_name,
                 COALESCE(v.village_name, '') as village_name,
                 cc.lot_no,
+                cc.purchase_rate, -- <<< NEW: Fetching the rate from DB
                 si.bags_loaded as bags
             FROM shipment_items si
             JOIN crop_cycles cc ON si.crop_cycle_id = cc.crop_cycle_id
