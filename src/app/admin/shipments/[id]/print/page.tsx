@@ -219,7 +219,7 @@ export default function ShipmentBillPage() {
         {/* 1. TOP HEADER (Logo/Address) */}
         <div className="text-center border-b-2 border-black pb-2 mb-4">
           <h1 className="text-3xl font-black tracking-wider uppercase mb-1">
-            RUDRA SEED & ORGANISER
+            RUDRA SEEDS & ORGANISER
           </h1>
           <p className="font-bold text-gray-800 text-xs">
             Shop No. 16, Nr. Sardar Chok, Jetpur Road, Dhoraji - 360 410
