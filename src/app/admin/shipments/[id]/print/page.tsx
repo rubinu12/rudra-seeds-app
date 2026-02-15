@@ -180,6 +180,7 @@ export default function ShipmentBillPage() {
             margin: 0;
             padding: 0;
             background: white;
+            overflow: hidden;
           }
           [data-sonner-toaster], .sonner-toast, ol[data-sonner-toaster] {
             display: none !important;
@@ -214,7 +215,7 @@ export default function ShipmentBillPage() {
       </div>
 
       {/* --- A4 PAPER CONTAINER --- */}
-      <div className="max-w-[210mm] mx-auto bg-white shadow-2xl print:shadow-none p-[10mm] min-h-[297mm] print:min-h-0 print:h-screen print:w-full overflow-hidden text-sm relative leading-normal">
+      <div className="max-w-[210mm] mx-auto bg-white shadow-2xl print:shadow-none p-[10mm] min-h-[297mm] print:min-h-0 print:h-[296mm] print:w-full overflow-hidden text-sm relative leading-normal flex flex-col">
         {/* 1. TOP HEADER (Logo/Address) */}
         <div className="text-center border-b-2 border-black pb-2 mb-4">
           <h1 className="text-3xl font-black tracking-wider uppercase mb-1">
