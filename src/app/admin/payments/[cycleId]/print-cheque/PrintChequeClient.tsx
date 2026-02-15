@@ -335,10 +335,10 @@ export default function PrintChequeClient({
         .date-field {
           position: absolute;
           top: 6mm;
-          left: 159mm;
+          left: 157mm;
           letter-spacing: 3mm;
           font-weight: bold;
-          font-size: 14px;
+          font-size: 12px;
         } /* Adjusted font size */
         .payee-field {
           position: absolute;
