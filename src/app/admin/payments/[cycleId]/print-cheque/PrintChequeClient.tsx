@@ -335,7 +335,7 @@ export default function PrintChequeClient({
         .date-field {
           position: absolute;
           top: 6mm;
-          left: 162mm;
+          left: 161mm;
           letter-spacing: 3mm;
           font-weight: bold;
           font-size: 12px;
@@ -343,14 +343,14 @@ export default function PrintChequeClient({
         .payee-field {
           position: absolute;
           top: 20mm;
-          left: 19mm;
+          left: 23mm;
           font-weight: bold;
           font-size: 14px;
         } /* Adjusted font size */
         .amount-words-1 {
           position: absolute;
           top: 28mm;
-          left: 30mm;
+          left: 33mm;
           font-size: 14px;
         } /* Adjusted font size */
         .amount-words-2 {
@@ -361,7 +361,7 @@ export default function PrintChequeClient({
         } /* Adjusted font size */
         .amount-figures {
           position: absolute;
-          top: 35mm;
+          top: 37mm;
           left: 158mm;
           font-weight: bold;
           font-size: 14px;
