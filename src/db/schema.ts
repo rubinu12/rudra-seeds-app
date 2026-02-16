@@ -195,7 +195,7 @@ export const cropCycles = pgTable("crop_cycles", {
 	seedId: integer("seed_id").notNull(),
 	season: varchar({ length: 50 }),
 	sowingDate: date("sowing_date"),
-	seedBagsPurchased: integer("seed_bags_purchased"),
+	seedBagsPurchased: numeric("seed_bags_purchased", { precision: 10, scale: 2 }),
 	seedCost: numeric("seed_cost", { precision: 10, scale:  2 }),
 	seedPaymentStatus: varchar("seed_payment_status", { length: 20 }),
 	harvestingDate: date("harvesting_date"),

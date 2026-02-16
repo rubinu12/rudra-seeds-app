@@ -151,6 +151,7 @@ export const SowingSection = ({
             id="bags"
             name="bags"
             label="Seed Bags"
+            step="0.01"
             value={cycleData.bags}
             onChange={handleValueChange}
             required
