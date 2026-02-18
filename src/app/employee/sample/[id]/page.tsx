@@ -23,9 +23,10 @@ type Params = Promise<{ id: string }>;
 // --- TYPES ---
 type DropdownOption = { value: string; label: string };
 
+// [UPDATED] Type definition matches the DB columns and new Action response
 type CycleData = {
     farmer_name: string;
-    lot_no: string | null;
+    lot_number: string | null; // Updated from lot_no
     mobile_number: string | null;
     village_name: string;
     goods_collection_method: string | null;
@@ -34,8 +35,8 @@ type CycleData = {
     sample_moisture: number | null;
     sample_purity: number | null;
     dust_percentage: number | null;
-    lab_remarks: string | null;
-    price_per_20kg: number | null;
+    sample_remarks: string | null; // Updated from lab_remarks
+    temporary_price_per_man: number | null; // Updated from price_per_20kg
 };
 
 type DropdownProps = {
@@ -154,9 +155,10 @@ export default function SampleEntryPage({ params }: { params: Params }) {
   });
 
   useEffect(() => {
+    // Fetch Data
     getSampleDetails(Number(id)).then((res) => {
       if (res) {
-        setData(res as unknown as CycleData); // Trusting DB return matches our simplified type
+        setData(res as unknown as CycleData); 
         setFormState({
           location: res.goods_collection_method || "Farm",
           color: res.color_grade || "",
@@ -228,11 +230,12 @@ export default function SampleEntryPage({ params }: { params: Params }) {
           <div className="grid grid-cols-2 gap-y-4 gap-x-2 relative z-10">
             <div>
               <label className="text-[10px] font-bold text-slate-400 uppercase block mb-0.5">
-                Lot No
+                Lot No (Multi)
               </label>
               <div className="text-sm font-black text-slate-800 flex items-center gap-1">
                 <Hash className="w-3 h-3 text-slate-400" />{" "}
-                {data.lot_no || "N/A"}
+                {/* [UPDATED] Uses lot_number which contains comma-separated lots */}
+                {data.lot_number || "N/A"}
               </div>
             </div>
 
@@ -360,7 +363,7 @@ export default function SampleEntryPage({ params }: { params: Params }) {
                 </label>
                 <textarea
                   name="remarks"
-                  defaultValue={data.lab_remarks || ""}
+                  defaultValue={data.sample_remarks || ""}
                   placeholder="Any other notes..."
                   className="w-full bg-white border border-slate-200 text-slate-800 text-sm font-medium rounded-2xl px-4 py-3 focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none resize-none h-24 shadow-sm transition-all"
                 />
@@ -376,7 +379,7 @@ export default function SampleEntryPage({ params }: { params: Params }) {
             <input
               type="text"
               value={
-                data.price_per_20kg ? `₹ ${data.price_per_20kg}` : "Pending"
+                data.temporary_price_per_man ? `₹ ${data.temporary_price_per_man}` : "Pending"
               }
               disabled
               className="w-full bg-slate-100 border border-slate-200 text-slate-500 text-lg font-bold rounded-2xl px-4 py-3 cursor-not-allowed"

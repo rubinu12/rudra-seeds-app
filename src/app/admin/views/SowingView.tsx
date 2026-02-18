@@ -42,13 +42,22 @@ export default function SowingView() {
     router.push("/admin/cycles/new");
   };
 
-  // --- FILTERING ---
-  const filtered = data.filter(
-    (d) =>
-      d.farmer_name.toLowerCase().includes(search.toLowerCase()) ||
-      d.village_name.toLowerCase().includes(search.toLowerCase()) ||
-      (d.lot_no && d.lot_no.toLowerCase().includes(search.toLowerCase()))
-  );
+  // --- FILTERING (FIXED for Multi-Lot) ---
+  const filtered = data.filter((d) => {
+    const term = search.toLowerCase();
+    
+    // Check basic fields
+    const basicMatch = 
+      d.farmer_name.toLowerCase().includes(term) ||
+      d.village_name.toLowerCase().includes(term);
+
+    // Check inside the lot_numbers array
+    const lotMatch = d.lot_numbers && d.lot_numbers.some(lot => 
+        lot.toLowerCase().includes(term)
+    );
+
+    return basicMatch || lotMatch;
+  });
 
   return (
     <div className="space-y-8 animate-fadeIn">
@@ -64,7 +73,7 @@ export default function SowingView() {
         onProcessFarmerPaymentsClick={() => {}}
       />
 
-      {/* 2. Main Action Card (Added Lot No Button Here) */}
+      {/* 2. Main Action Card */}
       <div className="bg-white rounded-3xl p-8 border border-gray-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6">
         <div className="flex items-center gap-4">
           <div className="w-14 h-14 bg-green-100 rounded-2xl flex items-center justify-center">
@@ -81,7 +90,7 @@ export default function SowingView() {
         </div>
 
         <div className="flex gap-3">
-          {/* NEW: Manage Lot Button */}
+          {/* Manage Lot Button */}
           <button
             onClick={() => setIsLotModalOpen(true)}
             className="flex items-center gap-2 bg-black text-white px-5 py-3 rounded-xl font-bold hover:bg-gray-800 transition-all shadow-md"
@@ -90,7 +99,7 @@ export default function SowingView() {
             Manage Lot No
           </button>
 
-          {/* Existing: Add Cycle Button */}
+          {/* Add Cycle Button */}
           <button
             onClick={handleStartNewCycle}
             className="flex items-center gap-2 bg-green-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-green-700 hover:shadow-lg transition-all"
@@ -106,7 +115,7 @@ export default function SowingView() {
         <KeyMetrics />
       </div>
 
-      {/* 4. Sowing List (Replaces Placeholder) */}
+      {/* 4. Sowing List */}
       <div className="bg-white border border-gray-200 rounded-3xl overflow-hidden shadow-sm">
         {/* Toolbar */}
         <div className="p-5 border-b border-gray-100 flex gap-4 bg-gray-50/50">
@@ -136,7 +145,7 @@ export default function SowingView() {
                 <th className="p-5">Location</th>
                 <th className="p-5">Seed Variety</th>
                 <th className="p-5">Sowing Date</th>
-                <th className="p-5">Lot No.</th>
+                <th className="p-5">Lot Numbers</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -176,10 +185,15 @@ export default function SowingView() {
                       {row.sowing_date}
                     </td>
                     <td className="p-5">
-                      {row.lot_no ? (
-                        <span className="font-mono font-bold text-black bg-yellow-300 px-2 py-1 rounded border border-yellow-400 shadow-sm">
-                          {row.lot_no}
-                        </span>
+                      {/* [UPDATED] Render Multiple Lots */}
+                      {row.lot_numbers && row.lot_numbers.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                            {row.lot_numbers.map((lot, idx) => (
+                                <span key={idx} className="font-mono font-bold text-black bg-yellow-300 px-2 py-1 rounded border border-yellow-400 shadow-sm text-xs">
+                                    {lot}
+                                </span>
+                            ))}
+                        </div>
                       ) : (
                         <span className="text-gray-300 italic text-xs">--</span>
                       )}

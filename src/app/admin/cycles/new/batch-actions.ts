@@ -3,7 +3,7 @@
 import { sql } from "@vercel/postgres";
 import { revalidatePath } from "next/cache";
 
-// --- HELPER ---
+// --- HELPER: Season Logic ---
 function getSeason(date: Date): string {
     const month = date.getMonth(); 
     const year = date.getFullYear();
@@ -21,7 +21,7 @@ export type BankAccountInput = {
 };
 
 export type QueuedCycle = {
-  tempId: string; // Unique ID for tracking in UI
+  tempId: string; // Critical for tracking errors in UI
   farmerId: string | null;
   farmerName: string;
   mobileNumber: string;
@@ -41,10 +41,9 @@ export type QueuedCycle = {
   paymentChoice: 'Paid' | 'Credit' | 'Partial';
   amountPaid: number;
   totalCost: number;
-  lot_no: string | null;
+  lot_no: string | null; // Input is still a string (e.g., "L-1, L-2")
 };
 
-// Result Type for UI
 export type BatchItemResult = {
     tempId: string;
     status: 'success' | 'error';
@@ -67,20 +66,20 @@ export async function bulkCreateCycles(queue: QueuedCycle[]): Promise<BatchRespo
   let successCount = 0;
   let failCount = 0;
 
-  // Process items sequentially so database constraints are respected in order
+  // Process sequentially to maintain consistency and order
   for (const item of queue) {
     try {
-      // --- CORE LOGIC (Wrapped in Try/Catch per item) ---
-      
-      // 1. Farmer Logic
+      await sql`BEGIN`; // Start Transaction per item
+
+      // --- 1. Farmer Logic ---
       let farmer_id = item.farmerId;
       if (!farmer_id) {
-        // Check for duplicates
-        const existing = await sql`SELECT farmer_id, name FROM farmers WHERE mobile_number = ${item.mobileNumber}`;
+        // Double check duplicate mobile before insert to give clean error
+        const existing = await sql`SELECT name FROM farmers WHERE mobile_number = ${item.mobileNumber}`;
         if (existing.rowCount && existing.rowCount > 0) {
-            throw new Error(`Mobile ${item.mobileNumber} exists (${existing.rows[0].name}). Use search.`);
+            throw new Error(`Mobile ${item.mobileNumber} is already registered to ${existing.rows[0].name}. Please search and select.`);
         }
-        // Create
+        
         const newFarmer = await sql`
             INSERT INTO farmers (name, mobile_number, aadhar_number, home_address)
             VALUES (${item.farmerName}, ${item.mobileNumber}, ${item.aadharNumber}, ${item.homeAddress})
@@ -89,7 +88,7 @@ export async function bulkCreateCycles(queue: QueuedCycle[]): Promise<BatchRespo
         farmer_id = newFarmer.rows[0].farmer_id;
       }
 
-      // 2. Farm Logic
+      // --- 2. Farm Logic ---
       let farm_id = item.farmId;
       if (!farm_id) {
         const newFarm = await sql`
@@ -100,7 +99,7 @@ export async function bulkCreateCycles(queue: QueuedCycle[]): Promise<BatchRespo
         farm_id = newFarm.rows[0].farm_id;
       }
 
-      // 3. Bank Accounts
+      // --- 3. Bank Accounts Logic ---
       const finalAccountIds: string[] = [...(item.selectedAccountIds || [])];
       if (item.newBankAccounts?.length > 0) {
           for (const acc of item.newBankAccounts) {
@@ -115,9 +114,10 @@ export async function bulkCreateCycles(queue: QueuedCycle[]): Promise<BatchRespo
           }
       }
 
-      // 4. Calcs
+      // --- 4. Payment & Date Calculations ---
       let finalAmountPaid = 0;
       let finalPaymentStatus = '';
+      
       if (item.paymentChoice === 'Paid') {
           finalAmountPaid = item.totalCost;
           finalPaymentStatus = 'Paid';
@@ -125,36 +125,51 @@ export async function bulkCreateCycles(queue: QueuedCycle[]): Promise<BatchRespo
           finalAmountPaid = 0;
           finalPaymentStatus = 'Credit';
       } else if (item.paymentChoice === 'Partial') {
-          finalAmountPaid = item.amountPaid;
+          finalAmountPaid = item.amountPaid || 0;
           if (finalAmountPaid <= 0) finalPaymentStatus = 'Credit';
           else if (finalAmountPaid >= item.totalCost) finalPaymentStatus = 'Paid';
           else finalPaymentStatus = 'Partial';
       }
+      
       const amountRemaining = item.totalCost - finalAmountPaid;
       const sowingDateObj = new Date(item.sowingDate);
       const season = getSeason(sowingDateObj);
       const cropCycleYear = sowingDateObj.getFullYear();
 
-      // 5. Insert Cycle
+      // --- 5. Insert Cycle (REMOVED lot_no column) ---
       const cycleRes = await sql`
         INSERT INTO crop_cycles (
           farmer_id, farm_id, seed_id, sowing_date, status, 
-          seed_bags_purchased, goods_collection_method, lot_no,
+          seed_bags_purchased, goods_collection_method,
           seed_cost, seed_payment_status, crop_cycle_year, season,
           amount_paid, amount_remaining, bank_accounts
         )
         VALUES (
           ${farmer_id}, ${farm_id}, ${item.seedId}, ${item.sowingDate}, 'Growing', 
-          ${item.bags}, ${item.goodsCollectionMethod}, ${item.lot_no},
+          ${item.bags}, ${item.goodsCollectionMethod},
           ${item.totalCost}, ${finalPaymentStatus}, ${cropCycleYear}, ${season},
           ${finalAmountPaid}, ${amountRemaining}, ${JSON.stringify(finalAccountIds)}
         )
         RETURNING crop_cycle_id
       `;
+      
+      const cycleId = cycleRes.rows[0].crop_cycle_id;
 
-      // 6. Wallet
+      // --- 6. Insert Lots (New Relation Table Logic) ---
+      if (item.lot_no && item.lot_no.trim().length > 0) {
+          // Parse: "L1, L2" -> ["L1", "L2"]
+          const lots = item.lot_no.split(',').map(l => l.trim()).filter(l => l !== "");
+          
+          for (const lot of lots) {
+             await sql`
+                INSERT INTO cycle_lots (crop_cycle_id, lot_number)
+                VALUES (${cycleId}, ${lot})
+             `;
+          }
+      }
+
+      // --- 7. Wallet Transaction (If Paid) ---
       if (finalAmountPaid > 0) {
-          const cycleId = cycleRes.rows[0].crop_cycle_id;
           await sql`
               INSERT INTO wallet_transactions (wallet_id, amount, transaction_type, description, reference_id)
               VALUES (1, ${finalAmountPaid}, 'CREDIT', ${`Seed Payment for Cycle #${cycleId}`}, ${cycleId})
@@ -162,17 +177,29 @@ export async function bulkCreateCycles(queue: QueuedCycle[]): Promise<BatchRespo
           await sql`UPDATE virtual_wallets SET balance = balance + ${finalAmountPaid} WHERE wallet_id = 1`;
       }
 
-      // SUCCESS FOR THIS ITEM
+      await sql`COMMIT`; // Commit success for this item
+      
       results.push({ tempId: item.tempId, status: 'success' });
       successCount++;
 
-    } catch (error) {
-      // FAILURE FOR THIS ITEM (But continue loop)
-      console.error(`Error processing item ${item.tempId}:`, error);
+    } catch (error: unknown) {
+      await sql`ROLLBACK`; // Undo anything for this specific item if it failed
+
+      // Error Message Cleanup
+      let msg = "Unknown Database Error";
+      if (error instanceof Error) {
+          msg = error.message;
+          // Beautify common SQL errors if needed
+          if (msg.includes("duplicate key")) msg = "Duplicate Data Error (likely Mobile or Aadhar)";
+          if (msg.includes("violates foreign key")) msg = "Invalid Selection (Village, Seed, or Landmark not found)";
+      }
+
+      console.error(`Error processing item ${item.tempId} (${item.farmerName}):`, msg);
+      
       results.push({ 
           tempId: item.tempId, 
           status: 'error', 
-          message:  "Unknown Database Error" 
+          message: msg 
       });
       failCount++;
     }
@@ -181,7 +208,7 @@ export async function bulkCreateCycles(queue: QueuedCycle[]): Promise<BatchRespo
   revalidatePath('/admin/dashboard');
   
   return { 
-      success: true, // The BATCH action ran successfully (even if individual items failed)
+      success: true, 
       results,
       summary: { total: queue.length, success: successCount, failed: failCount }
   };

@@ -14,7 +14,7 @@ export type CycleData = {
   goods_collection_method: string;
   paymentChoice: string;
   amountPaid: number;
-  lot_no: string; // New Field
+  lot_no: string; 
 };
 
 type Option = { value: string; label: string };
@@ -117,14 +117,15 @@ export const SowingSection = ({
                 type="text"
                 id="lot_no"
                 name="lot_no"
-                label="Lot Number (Optional)"
+                label="Lot Numbers (Optional)"
                 value={cycleData.lot_no}
                 onChange={handleValueChange}
-                className="uppercase placeholder:normal-case"
-                placeholder="e.g. L-101"
+                className="uppercase placeholder:normal-case font-mono"
+                placeholder="e.g. L-101, L-102"
               />
-              <p className="text-[10px] text-on-surface-variant/60 mt-1 ml-1">
-                  Leave blank if you want to assign later.
+              <p className="text-[11px] text-on-surface-variant/70 mt-1.5 ml-1 flex items-center gap-1.5">
+                  <span className="w-1 h-1 rounded-full bg-primary/50" />
+                  Separate multiple lots with commas
               </p>
         </div>
         

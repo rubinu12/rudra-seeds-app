@@ -2,14 +2,15 @@
 
 import { useState, useEffect } from 'react';
 import { 
-    Search, Upload, Save, Sprout, FileJson, AlertCircle, Filter, LoaderCircle 
+    Search, Upload, Save, Sprout, FileJson, AlertCircle, Filter, LoaderCircle, Stethoscope, CheckCircle2 
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { 
     getLotMasterData,
     getSowingData, 
-    updateLotNumber, 
-    bulkImportLotNumbers, 
+    updateCycleLots, 
+    bulkImportLotNumbers,
+    getMissingLotData, // [NEW IMPORT]
     SowingEntry 
 } from '@/src/app/admin/actions/lotManagement';
 import Modal from '@/src/components/ui/Modal'; 
@@ -22,7 +23,7 @@ type Props = {
 type SeedOption = { seed_id: number; variety_name: string };
 
 export default function LotNumberModal({ isOpen, onClose }: Props) {
-    const [mode, setMode] = useState<'manual' | 'bulk'>('manual');
+    const [mode, setMode] = useState<'manual' | 'bulk' | 'diagnostic'>('manual');
     const [seeds, setSeeds] = useState<SeedOption[]>([]);
     const [selectedSeed, setSelectedSeed] = useState<number | "">(""); 
     
@@ -36,14 +37,20 @@ export default function LotNumberModal({ isOpen, onClose }: Props) {
         }
     }, [isOpen]);
 
-    // Load Data when Seed Changes
+    // Load Data logic
     useEffect(() => {
+        if (mode === 'diagnostic') {
+            // Diagnostic ignores the seed filter and fetches globally
+            loadDiagnostic();
+            return;
+        }
+
         if (!selectedSeed) {
             setData([]); 
             return;
         }
         loadData();
-    }, [selectedSeed]);
+    }, [selectedSeed, mode]);
 
     const loadData = async () => {
         if(!selectedSeed) return;
@@ -53,56 +60,86 @@ export default function LotNumberModal({ isOpen, onClose }: Props) {
         setLoading(false);
     };
 
+    const loadDiagnostic = async () => {
+        setLoading(true);
+        const res = await getMissingLotData();
+        setData(res);
+        setLoading(false);
+    }
+
     return (
         <Modal isOpen={isOpen} onClose={onClose} title="Manage Lot Numbers">
             
-            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-4">
-                <label className="text-xs font-bold text-slate-500 uppercase mb-1 flex items-center gap-1">
-                    <Filter className="w-3 h-3" /> Filter by Seed Variety (Required)
-                </label>
-                <select 
-                    value={selectedSeed} 
-                    onChange={(e) => setSelectedSeed(Number(e.target.value))}
-                    className="w-full p-2.5 rounded-lg border border-slate-300 font-bold text-slate-800 focus:ring-2 focus:ring-black outline-none"
-                >
-                    <option value="">-- Select Seed to Begin --</option>
-                    {seeds.map((s) => (
-                        <option key={s.seed_id} value={s.seed_id}>{s.variety_name}</option>
-                    ))}
-                </select>
-            </div>
+            {/* Header / Filter Area */}
+            {mode !== 'diagnostic' && (
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-4">
+                    <label className="text-xs font-bold text-slate-500 uppercase mb-1 flex items-center gap-1">
+                        <Filter className="w-3 h-3" /> Filter by Seed Variety (Required)
+                    </label>
+                    <select 
+                        value={selectedSeed} 
+                        onChange={(e) => setSelectedSeed(Number(e.target.value))}
+                        className="w-full p-2.5 rounded-lg border border-slate-300 font-bold text-slate-800 focus:ring-2 focus:ring-black outline-none"
+                    >
+                        <option value="">-- Select Seed to Begin --</option>
+                        {seeds.map((s) => (
+                            <option key={s.seed_id} value={s.seed_id}>{s.variety_name}</option>
+                        ))}
+                    </select>
+                </div>
+            )}
 
-            <div className={`flex gap-2 mb-4 border-b border-slate-100 pb-2 transition-opacity ${!selectedSeed ? 'opacity-50 pointer-events-none' : ''}`}>
-                <button 
-                    onClick={() => setMode('manual')}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all ${mode === 'manual' ? 'bg-black text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}
+            {/* Mode Switcher */}
+            <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-2">
+                <div className="flex gap-2">
+                    <button 
+                        onClick={() => setMode('manual')}
+                        disabled={!selectedSeed && mode !== 'diagnostic'}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all 
+                            ${mode === 'manual' ? 'bg-black text-white shadow-md' : 'text-slate-500 hover:bg-slate-50 disabled:opacity-30'}`}
+                    >
+                        <Sprout className="w-4 h-4" /> Manual
+                    </button>
+                    <button 
+                        onClick={() => setMode('bulk')}
+                        disabled={!selectedSeed && mode !== 'diagnostic'}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all 
+                            ${mode === 'bulk' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50 disabled:opacity-30'}`}
+                    >
+                        <FileJson className="w-4 h-4" /> Bulk Import
+                    </button>
+                </div>
+
+                {/* Diagnostic Button */}
+                <button
+                    onClick={() => setMode('diagnostic')}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all border
+                        ${mode === 'diagnostic' ? 'bg-amber-100 text-amber-800 border-amber-200' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'}`}
                 >
-                    <Sprout className="w-4 h-4" /> Manual Entry
-                </button>
-                <button 
-                    onClick={() => setMode('bulk')}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all ${mode === 'bulk' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}
-                >
-                    <FileJson className="w-4 h-4" /> AI / Bulk Import
+                    <Stethoscope className="w-4 h-4" /> Diagnostic Run
                 </button>
             </div>
 
             <div className="h-[55vh] overflow-hidden relative">
-                {!selectedSeed ? (
+                {/* Empty State for Seed Selection */}
+                {(!selectedSeed && mode !== 'diagnostic') ? (
                     <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 bg-white/50 backdrop-blur-sm z-10">
                         <Sprout className="w-12 h-12 mb-2 opacity-20" />
                         <p className="font-bold">Please select a seed variety above</p>
                     </div>
                 ) : null}
 
+                {/* Content Area */}
                 {mode === 'manual' ? (
                     <ManualTab data={data} loading={loading} />
-                ) : (
+                ) : mode === 'bulk' ? (
                     <BulkTab 
                         seedId={Number(selectedSeed)} 
                         seedName={seeds.find(s => s.seed_id === selectedSeed)?.variety_name || ""}
                         refresh={loadData} 
                     />
+                ) : (
+                    <DiagnosticTab data={data} loading={loading} refresh={loadDiagnostic} />
                 )}
             </div>
         </Modal>
@@ -110,6 +147,46 @@ export default function LotNumberModal({ isOpen, onClose }: Props) {
 }
 
 // --- SUB COMPONENTS ---
+
+function DiagnosticTab({ data, loading, refresh }: { data: SowingEntry[], loading: boolean, refresh: () => void }) {
+    if (loading) {
+        return (
+            <div className="flex flex-col items-center justify-center h-full text-slate-400 gap-2">
+                <LoaderCircle className="w-8 h-8 animate-spin text-amber-500" />
+                <p className="font-medium text-amber-600">Scanning Database for Missing Lots...</p>
+            </div>
+        );
+    }
+
+    if (data.length === 0) {
+        return (
+            <div className="flex flex-col items-center justify-center h-full text-green-600 gap-2 bg-green-50/50 rounded-xl">
+                <CheckCircle2 className="w-12 h-12" />
+                <p className="font-bold text-lg">All Systems Nominal</p>
+                <p className="text-sm opacity-80">Every active farmer has a Lot Number assigned.</p>
+                <button onClick={refresh} className="mt-4 text-xs underline text-green-700">Run Scan Again</button>
+            </div>
+        );
+    }
+
+    return (
+        <div className="flex flex-col h-full">
+            <div className="bg-amber-50 p-3 rounded-lg border border-amber-100 mb-3 flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                    <p className="text-sm font-bold text-amber-900">Found {data.length} farmers with missing Lot Numbers.</p>
+                    <p className="text-xs text-amber-700">These farmers cannot be processed for Weighing/Billing until assigned.</p>
+                </div>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto pr-1 space-y-2 custom-scrollbar">
+                 {data.map(item => (
+                        <LotRow key={item.crop_cycle_id} item={item} showSeed={true} />
+                 ))}
+            </div>
+        </div>
+    );
+}
 
 function ManualTab({ data, loading }: { data: SowingEntry[], loading: boolean }) {
     const [search, setSearch] = useState("");
@@ -149,14 +226,17 @@ function ManualTab({ data, loading }: { data: SowingEntry[], loading: boolean })
     );
 }
 
-function LotRow({ item }: { item: SowingEntry }) {
-    const [val, setVal] = useState(item.lot_no || "");
+function LotRow({ item, showSeed = false }: { item: SowingEntry, showSeed?: boolean }) {
+    // Join array for display: ["L1", "L2"] -> "L1, L2"
+    const [val, setVal] = useState(item.lot_numbers ? item.lot_numbers.join(", ") : "");
     const [isDirty, setIsDirty] = useState(false);
     const [saving, setSaving] = useState(false);
 
     const handleSave = async () => {
         setSaving(true);
-        const res = await updateLotNumber(item.crop_cycle_id, val);
+        const lots = val.split(',').map(s => s.trim()).filter(Boolean);
+        
+        const res = await updateCycleLots(item.crop_cycle_id, lots);
         if (res.success) {
             toast.success("Saved");
             setIsDirty(false);
@@ -170,9 +250,17 @@ function LotRow({ item }: { item: SowingEntry }) {
         <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100 group hover:border-slate-300 transition-all">
             <div className="flex-1 min-w-0">
                 <p className="font-bold text-slate-800 text-sm truncate">{item.farmer_name}</p>
-                <div className="flex gap-2 text-xs text-slate-500 truncate">
+                <div className="flex gap-2 text-xs text-slate-500 truncate items-center">
+                    {showSeed && (
+                        <>
+                            <span className="bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-medium">
+                                {item.seed_variety}
+                            </span>
+                            <span className="text-slate-300">•</span>
+                        </>
+                    )}
                     <span>{item.village_name}</span>
-                    <span>•</span>
+                    <span className="text-slate-300">•</span>
                     <span>Sown: {item.sowing_date}</span>
                 </div>
             </div>
@@ -181,8 +269,8 @@ function LotRow({ item }: { item: SowingEntry }) {
                     value={val}
                     onChange={e => { setVal(e.target.value); setIsDirty(true); }}
                     placeholder="LOT NO"
-                    className={`w-28 px-2 py-1.5 rounded-lg border text-sm font-bold outline-none focus:ring-2 uppercase transition-all
-                        ${val ? 'bg-white border-slate-200' : 'bg-yellow-50 border-yellow-200 placeholder:text-yellow-400'}
+                    className={`w-36 px-2 py-1.5 rounded-lg border text-sm font-bold outline-none focus:ring-2 uppercase transition-all font-mono
+                        ${val ? 'bg-white border-slate-200' : 'bg-red-50 border-red-200 placeholder:text-red-400'}
                     `}
                 />
                 {isDirty && (
@@ -227,8 +315,8 @@ function BulkTab({ seedId, seedName, refresh }: { seedId: number, seedName: stri
                         <p className="font-bold">Bulk Import for <span className="underline">{seedName}</span>:</p>
                         <ul className="list-disc pl-4 space-y-1 text-xs opacity-80">
                             <li>This will only update farmers who are growing <b>{seedName}</b>.</li>
-                            <li>Upload PDF to AI &rarr; Ask for JSON Array.</li>
-                            <li>Format: <code className="bg-white px-1 rounded border border-blue-200">[ &#123; &quot;name&quot;: &quot;Ramesh&quot;, &quot;lot&quot;: &quot;L-101&quot; &#125; ]</code></li>
+                            <li>Format: <code className="bg-white px-1 rounded border border-blue-200">[ &#123; &quot;name&quot;: &quot;Ramesh&quot;, &quot;lot&quot;: &quot;L-101, L-102&quot; &#125; ]</code></li>
+                            <li>You can use comma separated strings for multiple lots.</li>
                         </ul>
                     </div>
                 </div>

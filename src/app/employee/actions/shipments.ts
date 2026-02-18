@@ -25,30 +25,29 @@ export type FarmerStock = {
   crop_cycle_id: number;
   farmer_name: string;
   village_name: string;
-  bags_remaining: number;
+  
+  // [FIX] Calculated field to handle cases where 'bags_remaining' wasn't init
+  bags_remaining: number; 
+  
   seed_id: number;
   seed_variety: string;
   color_code: string;
+  
+  // [FIX] Fields for UI Filters
   collection_loc: string;
   is_assigned: boolean;
+  lot_no: string; 
 };
 
 // ==============================================================================
-// 2. MASTER DATA FETCHERS
+// 2. MASTER DATA FETCHERS (Unchanged)
 // ==============================================================================
 
 export async function getAllVillages() {
   try {
-    const res = await sql`
-      SELECT village_name 
-      FROM villages 
-      WHERE is_active = TRUE 
-      ORDER BY village_name ASC
-    `;
+    const res = await sql`SELECT village_name FROM villages WHERE is_active = TRUE ORDER BY village_name ASC`;
     return res.rows.map((r) => r.village_name);
-  } catch (_e) {
-    return [];
-  }
+  } catch (_e) { return []; }
 }
 
 export async function getShipmentMasterData() {
@@ -75,26 +74,22 @@ export async function getShipmentMasterData() {
 }
 
 // ==============================================================================
-// 3. SHIPMENT CREATION
+// 3. SHIPMENT CREATION (Unchanged Logic)
 // ==============================================================================
 
 export async function createShipment(formData: FormData) {
   const session = await auth();
   const userId = session?.user?.id ? Number(session.user.id) : null;
 
-  if (!userId) {
-    return { success: false, message: "Unauthorized: Employee ID missing" };
-  }
+  if (!userId) return { success: false, message: "Unauthorized: Employee ID missing" };
 
   const capacityTonnes = Number(formData.get("capacity"));
   const vehicleNo = formData.get("vehicleNo");
   const transportId = formData.get("transportId");
   const destId = formData.get("destId");
   const location = formData.get("location") as string;
-  const landmarkIdRaw = formData.get("landmarkId");
-  const landmarkId = landmarkIdRaw ? Number(landmarkIdRaw) : null;
-  const villageIdRaw = formData.get("villageId");
-  const villageId = villageIdRaw ? Number(villageIdRaw) : null;
+  const landmarkId = formData.get("landmarkId") ? Number(formData.get("landmarkId")) : null;
+  const villageId = formData.get("villageId") ? Number(formData.get("villageId")) : null;
   const driverName = formData.get("driverName");
   const driverMobile = formData.get("driverMobile");
 
@@ -106,13 +101,9 @@ export async function createShipment(formData: FormData) {
     } else {
       seedIds = formData.getAll("seedIds").map((id) => Number(id));
     }
-  } catch (_e) {
-    return { success: false, message: "Invalid seed selection" };
-  }
+  } catch (_e) { return { success: false, message: "Invalid seed selection" }; }
 
-  if (seedIds.length === 0) {
-    return { success: false, message: "Select at least one seed variety" };
-  }
+  if (seedIds.length === 0) return { success: false, message: "Select at least one seed variety" };
 
   const seedArrayLiteral = `{${seedIds.join(",")}}`;
   const targetBags = Math.ceil(capacityTonnes * 20);
@@ -132,7 +123,6 @@ export async function createShipment(formData: FormData) {
                 FALSE, ${userId}
             )
         `;
-    
     revalidatePath("/employee/dashboard");
     return { success: true };
   } catch (error) {
@@ -142,7 +132,7 @@ export async function createShipment(formData: FormData) {
 }
 
 // ==============================================================================
-// 4. SHIPMENT RETRIEVAL (READ)
+// 4. SHIPMENT RETRIEVAL (READ) - FIXED
 // ==============================================================================
 
 export async function getActiveShipments(): Promise<ActiveShipment[]> {
@@ -157,7 +147,11 @@ export async function getActiveShipments(): Promise<ActiveShipment[]> {
             FROM shipments s
             LEFT JOIN shipment_companies sc ON s.shipment_company_id = sc.company_id
             LEFT JOIN villages v ON s.village_id = v.village_id
-            WHERE s.status = 'Loading'
+            
+            -- [FIX] Soft Filter: Show everything active (Loading, Filled, etc.)
+            -- Hides only completed/billed history
+            WHERE s.status NOT IN ('Dispatched', 'Bill Generated')
+            
             ORDER BY s.creation_date DESC
         `;
     return res.rows as ActiveShipment[];
@@ -182,120 +176,104 @@ export async function getShipmentById(id: number): Promise<ActiveShipment | null
             WHERE s.shipment_id = ${id}
         `;
     return res.rows[0] as ActiveShipment;
-  } catch (_e) {
-    return null;
-  }
-}
-
-export async function getShipmentManifest(shipmentId: number) {
-  try {
-    const res = await sql`
-      SELECT 
-        si.item_id,
-        si.bags_loaded,
-        si.added_at,
-        f.name as farmer_name,
-        COALESCE(v.village_name, 'Unknown') as village_name,
-        s.variety_name,
-        s.color_code,
-        cc.crop_cycle_id
-      FROM shipment_items si
-      JOIN crop_cycles cc ON si.crop_cycle_id = cc.crop_cycle_id
-      JOIN farmers f ON cc.farmer_id = f.farmer_id
-      JOIN farms fm ON cc.farm_id = fm.farm_id
-      LEFT JOIN villages v ON fm.village_id = v.village_id
-      JOIN seeds s ON cc.seed_id = s.seed_id
-      WHERE si.shipment_id = ${shipmentId}
-      ORDER BY si.added_at DESC
-    `;
-    return res.rows;
-  } catch (_e) {
-    return [];
-  }
+  } catch (_e) { return null; }
 }
 
 // ==============================================================================
-// 5. LOADING OPERATIONS (WRITE)
+// 5. LOADING OPERATIONS (WRITE) - FIXED
 // ==============================================================================
 
 export async function getFarmersForLoading(): Promise<FarmerStock[]> {
+  const session = await auth();
+  const userId = session?.user?.id ? Number(session.user.id) : 0;
+
   try {
     const res = await sql`
             SELECT 
                 cc.crop_cycle_id, 
                 f.name as farmer_name, 
                 COALESCE(v.village_name, 'Unknown') as village_name,
-                COALESCE(cc.bags_remaining_to_load, 0) as bags_remaining,
+                
+                -- [FIX] Fallback Logic: If bags_remaining is 0/NULL (initial state), use total quantity
+                COALESCE(NULLIF(cc.bags_remaining_to_load, 0), cc.quantity_in_bags, 0) as bags_remaining,
+                
                 cc.seed_id,
                 s.variety_name as seed_variety,
                 s.color_code,
+                
+                -- [FIX] Fields required for UI Filtering
                 COALESCE(cc.goods_collection_method, 'Farm') as collection_loc, 
-                true as is_assigned 
+                
+                -- [FIX] Dynamic Assignment Check
+                CASE 
+                    WHEN EXISTS (
+                        SELECT 1 FROM employee_assignments ea 
+                        WHERE ea.user_id = ${userId} AND ea.seed_id = cc.seed_id
+                    ) THEN true 
+                    ELSE false 
+                END as is_assigned,
+
+                -- [FIX] Fetch Multi-Lots
+                (
+                    SELECT STRING_AGG(lot_number, ', ') 
+                    FROM cycle_lots 
+                    WHERE crop_cycle_id = cc.crop_cycle_id
+                ) as lot_no
+
             FROM crop_cycles cc
             JOIN farmers f ON cc.farmer_id = f.farmer_id
             JOIN farms fm ON cc.farm_id = fm.farm_id
             LEFT JOIN villages v ON fm.village_id = v.village_id
             JOIN seeds s ON cc.seed_id = s.seed_id
-            WHERE (cc.status = 'Weighed' OR cc.status = 'Loading') 
-            AND COALESCE(cc.bags_remaining_to_load, 0) > 0
+            
+            -- [FIX] Broader Status Check
+            WHERE cc.status IN ('Weighed', 'Loading', 'Partially Loaded')
             ORDER BY cc.crop_cycle_id DESC
         `;
-    return res.rows as FarmerStock[];
-  } catch (_e) {
+        
+    // Filter out rows where calculated bags_remaining is 0 (Completed)
+    return (res.rows as FarmerStock[]).filter(r => Number(r.bags_remaining) > 0);
+  } catch (e) {
+    console.error("Fetch Farmers Error", e);
     return [];
   }
 }
 
-export async function addBagsToShipment(
-  shipmentId: number,
-  cycleId: number,
-  bagsToAdd: number
-) {
+export async function addBagsToShipment(shipmentId: number, cycleId: number, bagsToAdd: number) {
   const session = await auth();
   const userId = session?.user?.id ? Number(session.user.id) : null;
-
   if (!userId) return { success: false, message: "Unauthorized" };
 
   try {
-    // 1. Fetch Shipment & Farmer Stock in Parallel
     const [shipmentRes, check] = await Promise.all([
       sql`SELECT total_bags, target_bag_capacity FROM shipments WHERE shipment_id = ${shipmentId}`,
-      sql`SELECT bags_remaining_to_load FROM crop_cycles WHERE crop_cycle_id = ${cycleId}`
+      sql`SELECT bags_remaining_to_load, quantity_in_bags FROM crop_cycles WHERE crop_cycle_id = ${cycleId}`
     ]);
 
     if (shipmentRes.rowCount === 0) return { success: false, message: "Shipment not found" };
     
-    // --- [BUG FIX START] ---
+    // --- Capacity Validation ---
     const { total_bags, target_bag_capacity } = shipmentRes.rows[0];
-    
-    // Define the Margin (Must match UI)
     const MARGIN = 50; 
-    const maxAllowed = target_bag_capacity + MARGIN;
-    const newTotal = total_bags + bagsToAdd;
-
-    // Strict Server-Side Validation
-    if (newTotal > maxAllowed) {
-      return { 
-        success: false, 
-        message: `Capacity Exceeded! Max allowed is ${maxAllowed} bags (Target ${target_bag_capacity} + 50 Margin).` 
-      };
+    if ((total_bags + bagsToAdd) > (target_bag_capacity + MARGIN)) {
+      return { success: false, message: `Capacity Exceeded! Max allowed is ${target_bag_capacity + MARGIN}.` };
     }
-    // --- [BUG FIX END] ---
 
-    if (bagsToAdd > (check.rows[0]?.bags_remaining_to_load || 0)) {
-      return { success: false, message: "Not enough bags available with farmer" };
+    // --- Stock Validation ---
+    const cycleRow = check.rows[0];
+    // Use same fallback logic as fetcher
+    const currentStock = cycleRow.bags_remaining_to_load > 0 ? cycleRow.bags_remaining_to_load : cycleRow.quantity_in_bags;
+
+    if (bagsToAdd > currentStock) {
+      return { success: false, message: `Not enough bags. Available: ${currentStock}` };
     }
 
     await sql`BEGIN`;
 
-    await sql`
-            INSERT INTO shipment_items (shipment_id, crop_cycle_id, bags_loaded, added_at, loaded_by) 
-            VALUES (${shipmentId}, ${cycleId}, ${bagsToAdd}, NOW(), ${userId})
-        `;
-
+    await sql`INSERT INTO shipment_items (shipment_id, crop_cycle_id, bags_loaded, added_at, loaded_by) VALUES (${shipmentId}, ${cycleId}, ${bagsToAdd}, NOW(), ${userId})`;
     await sql`UPDATE shipments SET total_bags = total_bags + ${bagsToAdd} WHERE shipment_id = ${shipmentId}`;
 
-    const newRem = check.rows[0].bags_remaining_to_load - bagsToAdd;
+    const newRem = currentStock - bagsToAdd;
     const newStatus = newRem === 0 ? "Loaded" : "Loading";
 
     await sql`
@@ -313,105 +291,69 @@ export async function addBagsToShipment(
     return { success: false, message: "Transaction Failed" };
   }
 }
-export async function undoLastLoad(
-  shipmentId: number,
-  cycleId: number,
-  bagsToRevert: number
-) {
+
+// ... [Keep undoLastLoad, removeShipmentItem, markShipmentAsFilled, getShipmentManifest as previously defined] ...
+export async function undoLastLoad(shipmentId: number, cycleId: number, bagsToRevert: number) {
   try {
     await sql`BEGIN`;
-
-    await sql`
-            DELETE FROM shipment_items 
-            WHERE item_id = (
-                SELECT item_id FROM shipment_items 
-                WHERE shipment_id = ${shipmentId} AND crop_cycle_id = ${cycleId} AND bags_loaded = ${bagsToRevert}
-                ORDER BY added_at DESC 
-                LIMIT 1
-            )
-        `;
-
+    await sql`DELETE FROM shipment_items WHERE item_id = (SELECT item_id FROM shipment_items WHERE shipment_id = ${shipmentId} AND crop_cycle_id = ${cycleId} AND bags_loaded = ${bagsToRevert} ORDER BY added_at DESC LIMIT 1)`;
     await sql`UPDATE shipments SET total_bags = total_bags - ${bagsToRevert} WHERE shipment_id = ${shipmentId}`;
-
-    await sql`
-            UPDATE crop_cycles 
-            SET bags_remaining_to_load = bags_remaining_to_load + ${bagsToRevert}, status = 'Weighed'
-            WHERE crop_cycle_id = ${cycleId}
-        `;
-
+    // Fix: We assume if undoing, we add back to stock.
+    // If bags_remaining was 0, it becomes bagsToRevert.
+    await sql`UPDATE crop_cycles SET bags_remaining_to_load = COALESCE(bags_remaining_to_load, 0) + ${bagsToRevert}, status = 'Weighed' WHERE crop_cycle_id = ${cycleId}`;
     await sql`COMMIT`;
     revalidatePath(`/employee/shipment/${shipmentId}`);
     return { success: true };
-  } catch (_e) {
-    await sql`ROLLBACK`;
-    return { success: false, message: "Undo failed" };
-  }
+  } catch (_e) { await sql`ROLLBACK`; return { success: false, message: "Undo failed" }; }
 }
 
 export async function removeShipmentItem(itemId: number, shipmentId: number, cycleId: number, bags: number) {
   try {
     await sql`BEGIN`;
-
     await sql`DELETE FROM shipment_items WHERE item_id = ${itemId}`;
-
     await sql`UPDATE shipments SET total_bags = total_bags - ${bags} WHERE shipment_id = ${shipmentId}`;
-
-    await sql`
-      UPDATE crop_cycles 
-      SET bags_remaining_to_load = bags_remaining_to_load + ${bags}, 
-          status = 'Weighed' 
-      WHERE crop_cycle_id = ${cycleId}
-    `;
-
+    await sql`UPDATE crop_cycles SET bags_remaining_to_load = COALESCE(bags_remaining_to_load, 0) + ${bags}, status = 'Weighed' WHERE crop_cycle_id = ${cycleId}`;
     await sql`COMMIT`;
     revalidatePath(`/employee/shipment/${shipmentId}`);
     return { success: true };
-  } catch (_e) {
-    await sql`ROLLBACK`;
-    return { success: false, message: "Failed to remove item" };
-  }
+  } catch (_e) { await sql`ROLLBACK`; return { success: false, message: "Failed to remove item" }; }
 }
 
 export async function markShipmentAsFilled(shipmentId: number) {
   const session = await auth();
   const userId = session?.user?.id ? Number(session.user.id) : null;
-
-  if (!userId)
-    return { success: false, message: "Unauthorized: Missing Employee ID" };
+  if (!userId) return { success: false, message: "Unauthorized" };
 
   try {
-    const s =
-      await sql`SELECT total_bags, target_bag_capacity FROM shipments WHERE shipment_id = ${shipmentId}`;
+    const s = await sql`SELECT total_bags, target_bag_capacity FROM shipments WHERE shipment_id = ${shipmentId}`;
     const { total_bags, target_bag_capacity } = s.rows[0];
-
     const diff = total_bags - target_bag_capacity;
 
-    if (diff < -50) {
-      return {
-        success: false,
-        message: `Cannot Confirm: Underfilled by ${Math.abs(diff)} bags.`,
-      };
-    }
-    if (diff > 50) {
-      return {
-        success: false,
-        message: `Cannot Confirm: Overfilled by ${diff} bags.`,
-      };
-    }
+    if (diff < -50) return { success: false, message: `Underfilled by ${Math.abs(diff)} bags.` };
+    if (diff > 50) return { success: false, message: `Overfilled by ${diff} bags.` };
 
-    await sql`
-            UPDATE shipments 
-            SET 
-                status = 'Filled', 
-                confirmation_date = NOW(),
-                dispatch_by = ${userId} 
-            WHERE shipment_id = ${shipmentId}
-        `;
-
+    await sql`UPDATE shipments SET status = 'Filled', confirmation_date = NOW(), dispatch_by = ${userId} WHERE shipment_id = ${shipmentId}`;
     revalidatePath("/employee/dashboard");
     return { success: true };
-  } catch (e) {
-    console.error(e);
-    return { success: false, message: "Failed to confirm shipment." };
-  }
+  } catch (e) { return { success: false, message: "Failed to confirm." }; }
+}
+
+export async function getShipmentManifest(shipmentId: number) {
+  try {
+    const res = await sql`
+      SELECT 
+        si.item_id, si.bags_loaded, si.added_at,
+        f.name as farmer_name, COALESCE(v.village_name, 'Unknown') as village_name,
+        s.variety_name, s.color_code, cc.crop_cycle_id
+      FROM shipment_items si
+      JOIN crop_cycles cc ON si.crop_cycle_id = cc.crop_cycle_id
+      JOIN farmers f ON cc.farmer_id = f.farmer_id
+      JOIN farms fm ON cc.farm_id = fm.farm_id
+      LEFT JOIN villages v ON fm.village_id = v.village_id
+      JOIN seeds s ON cc.seed_id = s.seed_id
+      WHERE si.shipment_id = ${shipmentId}
+      ORDER BY si.added_at DESC
+    `;
+    return res.rows;
+  } catch (_e) { return []; }
 }

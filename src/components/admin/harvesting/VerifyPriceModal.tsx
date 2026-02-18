@@ -3,9 +3,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import Modal from '@/src/components/ui/Modal';
 import { Input } from '@/src/components/ui/FormInputs';
-import { CycleForPriceVerification } from '@/src/lib/definitions'; 
+// [CHANGE] Import type from the action file to ensure sync
+import { 
+    verifyAndFinalizePrice, 
+    CycleForPriceVerification 
+} from '@/src/app/admin/actions/pricing-actions'; 
 import { CheckCircle, LoaderCircle, RefreshCw, Phone, Droplets, Sparkles, AlertCircle } from 'lucide-react';
-import { verifyAndFinalizePrice } from '@/src/app/admin/actions/pricing-actions'; // Fixed Import Path
 import { toast } from 'sonner';
 
 type Props = {
@@ -68,7 +71,6 @@ function PriceRow({ cycle, onSuccess, autoFocus }: { cycle: CycleForPriceVerific
     const handleConfirmPrice = async () => {
         if (!finalPrice) return;
         setIsPending(true);
-        // Ensure action takes correct args
         const res = await verifyAndFinalizePrice(cycle.crop_cycle_id, Number(finalPrice));
         if (res.success) {
             toast.success("Price Confirmed");
@@ -106,24 +108,32 @@ function PriceRow({ cycle, onSuccess, autoFocus }: { cycle: CycleForPriceVerific
             <div className="flex justify-between items-start mb-3">
                 <div className="flex-1 min-w-0 mr-2">
                     <h3 className="font-bold text-slate-900 text-lg truncate">{cycle.farmer_name}</h3>
-                    <p className="text-xs text-slate-500 font-medium truncate mb-2">
-                        {cycle.variety_name} • {cycle.village_name}
-                    </p>
+                    
+                    {/* [UPDATED DISPLAY] Show Lot Numbers */}
+                    <div className="flex flex-wrap gap-2 items-center mb-1 mt-1">
+                        <span className="text-xs text-slate-500 font-medium truncate">
+                            {cycle.variety_name} • {cycle.village_name}
+                        </span>
+                        {cycle.lot_number && (
+                            <span className="text-[10px] font-bold bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded border border-amber-200">
+                                {cycle.lot_number}
+                            </span>
+                        )}
+                    </div>
+
                     {cycle.mobile_number ? (
                         <a 
                             ref={callLinkRef}
                             href={`tel:${cycle.mobile_number}`}
                             onClick={(e) => e.stopPropagation()}
-                            className="inline-flex items-center gap-2 px-4 py-2 bg-green-100 text-green-800 rounded-xl hover:bg-green-200 active:scale-95 transition-all border border-green-200 shadow-sm hover:shadow-md cursor-pointer"
+                            className="inline-flex items-center gap-2 px-2 py-1 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 mt-2 border border-green-100"
                             title="Shortcut: Alt + C"
                         >
-                            <div className="p-1.5 bg-white rounded-full text-green-600">
-                                <Phone className="w-5 h-5" />
-                            </div>
-                            <span className="text-base font-bold tracking-wide">{cycle.mobile_number}</span>
+                            <Phone className="w-3 h-3" />
+                            <span className="text-xs font-bold">{cycle.mobile_number}</span>
                         </a>
                     ) : (
-                        <span className="text-xs text-slate-400 font-medium italic">No Phone Number</span>
+                        <span className="text-xs text-slate-400 font-medium italic mt-2 block">No Phone Number</span>
                     )}
                 </div>
                 <div className="text-right">
@@ -175,9 +185,6 @@ function PriceRow({ cycle, onSuccess, autoFocus }: { cycle: CycleForPriceVerific
                         autoFocus={false}
                         placeholder="Type price..."
                     />
-                    <span className="absolute right-0 -top-6 text-[10px] text-slate-400 font-medium px-2 py-0.5 bg-slate-100 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
-                        Alt + C to Call
-                    </span>
                  </div>
                  <button
                     onClick={handleConfirmPrice}

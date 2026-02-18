@@ -3,12 +3,11 @@ export const dynamic = 'force-dynamic';
 import { sql } from '@vercel/postgres';
 import DashboardClient from './DashboardClient';
 import { getPendingSamples } from '@/src/app/employee/actions/sample';
-import { getPendingWeighing } from '@/src/app/employee/actions/weigh';
+import { getPendingWeighing, WeighingItem } from '@/src/app/employee/actions/weigh';
 import { getActiveShipments, getShipmentMasterData } from '@/src/app/employee/actions/shipments';
 
 // 1. Import the strict types we defined in the tabs
 import { SampleTabItem } from '@/src/components/employee/tabs/SampleTab';
-import { WeighingItem } from '@/src/components/employee/tabs/WeighingTab';
 import { MasterData } from '@/src/components/employee/loading/NewShipmentModal';
 
 const CURRENT_USER_ID = 10; // Hardcoded for now

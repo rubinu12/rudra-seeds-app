@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import SmartHeader from "@/src/components/employee/SmartHeader";
 import UniversalCard from "@/src/components/employee/UniversalCard";
 import SampleTab, { SampleTabItem } from "@/src/components/employee/tabs/SampleTab";
-import WeighingTab, { WeighingItem } from "@/src/components/employee/tabs/WeighingTab";
+import WeighingTab  from "@/src/components/employee/tabs/WeighingTab";
+import { WeighingItem } from "@/src/app/employee/actions/weigh";
 import LoadTab from "@/src/components/employee/tabs/LoadTab";
 
 import { searchGlobalCycles } from "@/src/app/employee/actions/search";

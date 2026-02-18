@@ -27,14 +27,24 @@ export type ProcessPaymentFormState = {
     cycleId?: number;
 };
 
-// --- 1. FETCH ACTION ---
+// --- 1. FETCH ACTION (FIXED) ---
 export async function getCyclesReadyForPayment(): Promise<CycleForPaymentSelection[]> {
     try {
         const result = await sql<CycleForPaymentSelection>`
             SELECT 
                 cc.crop_cycle_id,
                 COALESCE(f.name, 'Unknown Farmer') AS farmer_name,
-                cc.lot_no,
+                
+                -- [FIX] Hybrid Lot Fetching: Prefers new table, falls back to old column
+                COALESCE(
+                    (
+                        SELECT STRING_AGG(lot_number, ', ') 
+                        FROM cycle_lots 
+                        WHERE crop_cycle_id = cc.crop_cycle_id
+                    ),
+                    cc.lot_no
+                ) AS lot_no,
+
                 COALESCE(s.variety_name, 'Unknown Variety') AS seed_variety,
                 cc.quantity_in_bags
             FROM crop_cycles cc
@@ -65,7 +75,6 @@ const ChequeDetailSchema = z.object({
 
 const ProcessPaymentSchema = z.object({
     cycleId: z.coerce.number().int().positive(),
-    // [REMOVED] Bill Number manual validation
     grossPayment: z.coerce.number(),
     netPayment: z.coerce.number().positive("Net payment must be positive."),
     dueDays: z.coerce.number().int().min(0).default(22),
@@ -107,7 +116,7 @@ export async function processFarmerPaymentAction(
     const year = paymentDate.getFullYear();
     const prefix = `${year}-B-`;
     
-    // 1. Find the last bill number for this year (e.g., 2024-B-055)
+    // 1. Find the last bill number for this year
     const lastBillRes = await sql`
         SELECT bill_number FROM crop_cycles 
         WHERE bill_number LIKE ${prefix + '%'}
@@ -117,15 +126,15 @@ export async function processFarmerPaymentAction(
 
     let nextSeq = 1;
     if (lastBillRes.rowCount && lastBillRes.rowCount > 0 && lastBillRes.rows[0].bill_number) {
-        const last = lastBillRes.rows[0].bill_number; // "2024-B-055"
-        const parts = last.split('-'); // ["2024", "B", "055"]
-        const lastNum = parseInt(parts[parts.length - 1], 10); // 55
+        const last = lastBillRes.rows[0].bill_number; 
+        const parts = last.split('-'); 
+        const lastNum = parseInt(parts[parts.length - 1], 10); 
         if (!isNaN(lastNum)) {
-            nextSeq = lastNum + 1; // 56
+            nextSeq = lastNum + 1; 
         }
     }
 
-    // 2. Generate New Bill Number (e.g., 2024-B-056)
+    // 2. Generate New Bill Number
     const autoBillNumber = `${prefix}${String(nextSeq).padStart(3, '0')}`;
     // --- [AUTO-BILL LOGIC END] ---
 
@@ -144,7 +153,7 @@ export async function processFarmerPaymentAction(
         await sql`
             UPDATE crop_cycles
             SET
-                bill_number = ${autoBillNumber},  -- [UPDATED] Using Auto Generated Number
+                bill_number = ${autoBillNumber},
                 total_payment = ${grossPayment},
                 final_payment = ${netPayment},
                 cheque_due_date = ${maxDueDateISO}, 

@@ -3,19 +3,15 @@
 import { useState } from "react";
 import Modal from "@/src/components/ui/Modal";
 import {
-  ChevronRight,
-  FlaskConical,
-  RefreshCw,
-  LoaderCircle,
-  ArrowLeft,
-  Save,
+  ChevronRight, FlaskConical, RefreshCw, LoaderCircle, ArrowLeft, Save,
 } from "lucide-react";
+// [CHANGE] Import from sample-actions
 import {
   CycleForSampleEntry,
   submitAdminSampleData,
 } from "@/src/app/admin/actions/sample-actions";
-import FloatingLabelInput from "@/src/components/ui/FloatingLabelInput"; // Standardized Input
-import FloatingLabelSelect from "@/src/components/ui/FloatingLabelSelect"; // Standardized Select
+import FloatingLabelInput from "@/src/components/ui/FloatingLabelInput"; 
+import FloatingLabelSelect from "@/src/components/ui/FloatingLabelSelect";
 
 type Props = {
   isOpen: boolean;
@@ -26,14 +22,9 @@ type Props = {
 };
 
 export default function SampleEntryModal({
-  isOpen,
-  onClose,
-  cycles,
-  onRefresh,
-  isRefreshing,
+  isOpen, onClose, cycles, onRefresh, isRefreshing,
 }: Props) {
-  const [selectedCycle, setSelectedCycle] =
-    useState<CycleForSampleEntry | null>(null);
+  const [selectedCycle, setSelectedCycle] = useState<CycleForSampleEntry | null>(null);
 
   const ModalHeader = (
     <div className="flex items-center justify-between w-full">
@@ -69,12 +60,7 @@ export default function SampleEntryModal({
   );
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title={ModalHeader}
-      maxWidth="max-w-lg"
-    >
+    <Modal isOpen={isOpen} onClose={onClose} title={ModalHeader} maxWidth="max-w-lg">
       <div className="space-y-4">
         {!selectedCycle ? (
           // LIST VIEW
@@ -90,9 +76,18 @@ export default function SampleEntryModal({
                     <p className="font-semibold text-on-surface text-base truncate">
                       {cycle.farmer_name}
                     </p>
-                    <p className="text-sm text-on-surface-variant truncate">
-                      {cycle.seed_variety}
-                    </p>
+                    
+                    {/* [UPDATED DISPLAY] Seed + Lot No */}
+                    <div className="flex items-center gap-2 mt-0.5">
+                        <p className="text-sm text-on-surface-variant truncate">
+                        {cycle.seed_variety}
+                        </p>
+                        {cycle.lot_number && (
+                            <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[10px] font-bold border border-blue-100">
+                                {cycle.lot_number}
+                            </span>
+                        )}
+                    </div>
                   </div>
                   <div className="flex items-center gap-1 text-primary shrink-0">
                     <FlaskConical className="w-4 h-4" />
@@ -110,7 +105,7 @@ export default function SampleEntryModal({
             </p>
           )
         ) : (
-          // FORM VIEW (Replacing the Redirection)
+          // FORM VIEW
           <SampleFormEmbedded
             cycle={selectedCycle}
             onComplete={() => {
@@ -124,13 +119,7 @@ export default function SampleEntryModal({
   );
 }
 
-function SampleFormEmbedded({
-  cycle,
-  onComplete,
-}: {
-  cycle: CycleForSampleEntry;
-  onComplete: () => void;
-}) {
+function SampleFormEmbedded({ cycle, onComplete }: { cycle: CycleForSampleEntry; onComplete: () => void; }) {
   const [isSaving, setIsSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
@@ -153,85 +142,34 @@ function SampleFormEmbedded({
   return (
     <form onSubmit={handleSave} className="space-y-6 animate-fadeIn py-2">
       <div className="grid grid-cols-2 gap-x-4 gap-y-6">
-        <FloatingLabelInput
-          label="Moisture (%)"
-          name="moisture"
-          type="number"
-          step="0.01"
-          required
-          id={""}
-        />
-        <FloatingLabelInput
-          label="Purity (%)"
-          name="purity"
-          type="number"
-          step="0.01"
-          required
-          id={""}
-        />
-        <FloatingLabelInput
-          label="Dust (%)"
-          name="dust"
-          type="number"
-          step="0.01"
-          required
-          id={""}
-        />
+        <FloatingLabelInput label="Moisture (%)" name="moisture" type="number" step="0.01" required id="moisture" />
+        <FloatingLabelInput label="Purity (%)" name="purity" type="number" step="0.01" required id="purity" />
+        <FloatingLabelInput label="Dust (%)" name="dust" type="number" step="0.01" required id="dust" />
 
-        <FloatingLabelSelect label="Color Grade" name="colors" required id={""}>
+        <FloatingLabelSelect label="Color Grade" name="colors" required id="colors">
           <option value="White">White (સફેદ)</option>
           <option value="Good">Good (સારો)</option>
           <option value="Excellent">Excellent (ઉત્તમ)</option>
         </FloatingLabelSelect>
 
-        <FloatingLabelSelect
-          label="Non-Seed (બિન-બીજ)"
-          name="non_seed"
-          required
-          className="col-span-2"
-          id={""}
-        >
+        <FloatingLabelSelect label="Non-Seed (બિન-બીજ)" name="non_seed" required className="col-span-2" id="non_seed">
           <option value="Rare">Rare (નહિવત્)</option>
           <option value="Less">Less (ઓછું)</option>
           <option value="High">High (વધુ)</option>
         </FloatingLabelSelect>
       </div>
 
-      <FloatingLabelInput
-        label="Temporary Price (Admin Only)"
-        name="temporary_price_per_man"
-        type="number"
-        step="0.01"
-        placeholder=" " // Required for float label
-        id={""}
-      />
+      <FloatingLabelInput label="Temporary Price (Admin Only)" name="temporary_price_per_man" type="number" step="0.01" placeholder=" " id="temp_price" />
 
       <div className="space-y-1">
-        <label className="text-xs font-medium text-on-surface-variant px-1">
-          Remarks
-        </label>
-        <textarea
-          name="remarks"
-          rows={2}
-          className="w-full p-3 rounded-xl border border-outline/30 bg-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none text-sm transition-all"
-          placeholder="Any notes about sample quality..."
-        />
+        <label className="text-xs font-medium text-on-surface-variant px-1">Remarks</label>
+        <textarea name="remarks" rows={2} className="w-full p-3 rounded-xl border border-outline/30 bg-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none text-sm transition-all" placeholder="Any notes..." />
       </div>
 
-      {errorMsg && (
-        <p className="text-sm text-red-500 font-medium px-1">{errorMsg}</p>
-      )}
+      {errorMsg && <p className="text-sm text-red-500 font-medium px-1">{errorMsg}</p>}
 
-      <button
-        type="submit"
-        disabled={isSaving}
-        className="w-full bg-primary text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 hover:shadow-lg transition-all disabled:opacity-50"
-      >
-        {isSaving ? (
-          <LoaderCircle className="animate-spin w-5 h-5" />
-        ) : (
-          <Save className="w-5 h-5" />
-        )}
+      <button type="submit" disabled={isSaving} className="w-full bg-primary text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 hover:shadow-lg transition-all disabled:opacity-50">
+        {isSaving ? <LoaderCircle className="animate-spin w-5 h-5" /> : <Save className="w-5 h-5" />}
         Confirm & Save Sample
       </button>
     </form>

@@ -2,139 +2,173 @@
 
 import { sql } from "@vercel/postgres";
 import { revalidatePath } from "next/cache";
-import { z } from "zod";
 import { auth } from "@/auth";
 
-// --- Fetch Pending Weighing List ---
-export async function getPendingWeighing() {
+// --- TYPES ---
+export type WeighingItem = {
+  crop_cycle_id: number;
+  farmer_name: string;
+  mobile_number: string;
+  village_name: string;
+  landmark_name: string;
+  seed_variety: string;
+  color_code?: string;
+  status: string;
+  lot_no: string; 
+  collection_loc: string; // goods_collection_method
+  is_assigned: boolean;   // Dynamic based on logged-in user
+  seed_bags_purchased: number;
+  seed_bags_returned: number;
+};
+
+export type CycleLotOption = {
+  lot_id: number;
+  lot_number: string;
+  current_weight: number;
+};
+
+export type LotWeightInput = {
+    lot_id: number;
+    weight: number;
+};
+
+// --- 1. GET PENDING WEIGHING (Filtered by Status = 'Priced') ---
+export async function getPendingWeighing(): Promise<WeighingItem[]> {
+  const session = await auth();
+  const userId = session?.user?.id ? Number(session.user.id) : 0;
+
   try {
-    const session = await auth();
-    const userId = session?.user?.id ? Number(session.user.id) : null;
-
-    if (!userId) {
-      console.error("Unauthorized access to weighing list");
-      return [];
-    }
-
-    console.log(`⚖️ Fetching Weighing List for User ID: ${userId}`);
-
-    const result = await sql`
-            SELECT 
-                cc.crop_cycle_id,
-                f.name as farmer_name,
-                f.mobile_number,
-                v.village_name, 
-                l.landmark_name,
-                s.variety_name as seed_variety, 
-                s.color_code,
-                cc.status, 
-                cc.lot_no,
-                cc.goods_collection_method as collection_loc,
-                cc.seed_bags_purchased,
-                cc.seed_bags_returned,
-
-                EXISTS (
-                    SELECT 1 FROM employee_assignments ea 
-                    WHERE ea.seed_id = cc.seed_id AND ea.user_id = ${userId}
-                ) as is_assigned
-                
-            FROM crop_cycles cc
-            JOIN farmers f ON cc.farmer_id = f.farmer_id
-            LEFT JOIN farms fm ON cc.farm_id = fm.farm_id
-            LEFT JOIN villages v ON fm.village_id = v.village_id
-            LEFT JOIN landmarks l ON fm.landmark_id = l.landmark_id
-            LEFT JOIN seeds s ON cc.seed_id = s.seed_id
+    const res = await sql`
+        SELECT 
+            cc.crop_cycle_id,
+            f.name as farmer_name,
+            f.mobile_number,
+            COALESCE(v.village_name, 'Unknown') as village_name,
+            l.landmark_name,
+            s.variety_name as seed_variety,
+            s.color_code,
+            cc.status,
+            COALESCE(cc.goods_collection_method, 'Farm') as collection_loc,
+            COALESCE(cc.seed_bags_purchased, 0) as seed_bags_purchased,
+            COALESCE(cc.seed_bags_returned, 0) as seed_bags_returned,
             
-            WHERE cc.status = 'Priced'
-            ORDER BY cc.pricing_date ASC
-        `;
+            -- Fetch aggregated lots
+            (
+                SELECT STRING_AGG(lot_number, ', ') 
+                FROM cycle_lots 
+                WHERE crop_cycle_id = cc.crop_cycle_id
+            ) as lot_no,
 
-    return result.rows;
-  } catch (error: unknown) {
-    const msg = error instanceof Error ? error.message : "Unknown error";
-    console.error("Fetch Error:", msg);
+            -- Calculate if this cycle is assigned to the current user
+            CASE 
+                WHEN EXISTS (
+                    SELECT 1 
+                    FROM employee_assignments ea 
+                    WHERE ea.user_id = ${userId} AND ea.seed_id = cc.seed_id
+                ) THEN true 
+                ELSE false 
+            END as is_assigned
+
+        FROM crop_cycles cc
+        JOIN farmers f ON cc.farmer_id = f.farmer_id
+        JOIN farms fm ON cc.farm_id = fm.farm_id
+        LEFT JOIN villages v ON fm.village_id = v.village_id
+        LEFT JOIN landmarks l ON fm.landmark_id = l.landmark_id
+        JOIN seeds s ON cc.seed_id = s.seed_id
+        
+        -- STRICT STATUS FILTER: Only 'Priced' are ready for weighing
+        WHERE cc.status = 'Priced'
+        ORDER BY cc.crop_cycle_id DESC
+    `;
+
+    return res.rows.map(row => ({
+        crop_cycle_id: row.crop_cycle_id,
+        farmer_name: row.farmer_name,
+        mobile_number: row.mobile_number,
+        village_name: row.village_name,
+        landmark_name: row.landmark_name || "",
+        seed_variety: row.seed_variety,
+        color_code: row.color_code,
+        status: row.status,
+        lot_no: row.lot_no || "No Lot",
+        collection_loc: row.collection_loc,
+        is_assigned: row.is_assigned, 
+        seed_bags_purchased: Number(row.seed_bags_purchased),
+        seed_bags_returned: Number(row.seed_bags_returned)
+    }));
+  } catch (e) {
+    console.error("Get Weighing List Error:", e);
     return [];
   }
 }
 
-// --- Submit Weighing Data ---
+// --- 2. GET LOT OPTIONS ---
+export async function getCycleLots(cycleId: number): Promise<CycleLotOption[]> {
+    try {
+        const res = await sql`
+            SELECT lot_id, lot_number, bags_weighed as current_weight 
+            FROM cycle_lots 
+            WHERE crop_cycle_id = ${cycleId}
+            ORDER BY lot_id ASC
+        `;
+        return res.rows.map(r => ({
+            lot_id: r.lot_id,
+            lot_number: r.lot_number,
+            current_weight: Number(r.current_weight || 0)
+        }));
+    } catch (e) {
+        return [];
+    }
+}
 
-const WeighingSchema = z.object({
-  cropCycleId: z.coerce.number(),
-  lotNo: z.string().min(1, "Lot Number is required."),
-  bags: z.coerce.number().min(1, "Bags must be at least 1."),
-});
-
-// Fixed: Changed prevState type from any to unknown or a specific type
-export async function submitWeighing(_prevState: unknown, formData: FormData) {
+// --- 3. SUBMIT WEIGHING ---
+export async function submitWeighing(
+    cycleId: number, 
+    lots: LotWeightInput[],
+    remarks: string
+) {
   const session = await auth();
   const userId = session?.user?.id ? Number(session.user.id) : null;
-
-  if (!userId) {
-      return { success: false, message: "Unauthorized: Please login." };
-  }
-
-  const validation = WeighingSchema.safeParse({
-    cropCycleId: formData.get("cropCycleId"),
-    lotNo: formData.get("lotNo"),
-    bags: formData.get("bags"),
-  });
-
-  if (!validation.success) {
-    return { success: false, message: validation.error.issues[0].message };
-  }
-
-  const { cropCycleId, lotNo, bags } = validation.data;
+  if (!userId) return { success: false, message: "Unauthorized" };
 
   try {
-    const check = await sql`
-            SELECT lot_no, seed_bags_purchased, seed_bags_returned 
-            FROM crop_cycles 
-            WHERE crop_cycle_id = ${cropCycleId}
+    await sql`BEGIN`;
+
+    // 1. Update Each Lot
+    for (const lot of lots) {
+        await sql`
+            UPDATE cycle_lots 
+            SET bags_weighed = ${lot.weight} 
+            WHERE lot_id = ${lot.lot_id} AND crop_cycle_id = ${cycleId}
         `;
-
-    if (check.rows.length === 0) {
-      return { success: false, message: "Cycle not found." };
     }
 
-    const cycle = check.rows[0];
+    // 2. Recalculate Total
+    const sumRes = await sql`
+        SELECT SUM(bags_weighed) as total 
+        FROM cycle_lots 
+        WHERE crop_cycle_id = ${cycleId}
+    `;
+    const newTotal = Number(sumRes.rows[0].total || 0);
 
-    if (cycle.lot_no?.trim().toUpperCase() !== lotNo.trim().toUpperCase()) {
-      return {
-        success: false,
-        message: `Lot Number Mismatch! System expects: ${cycle.lot_no}`,
-      };
-    }
-
-    const purchased = Number(cycle.seed_bags_purchased || 0);
-    const returned = Number(cycle.seed_bags_returned || 0);
-    const finalSeedBags = purchased - returned;
-    const threshold = finalSeedBags > 0 ? finalSeedBags * 50 : 0;
-    const isFlagged = threshold > 0 && bags > threshold;
-
+    // 3. Update Parent Cycle
     await sql`
-            UPDATE crop_cycles
-            SET 
-                status = 'Weighed',
-                quantity_in_bags = ${bags},
-                bags_remaining_to_load = ${bags},
-                weighing_date = NOW(),
-                is_production_flagged = ${isFlagged},
-                weighed_by = ${userId}
-            WHERE crop_cycle_id = ${cropCycleId}
-        `;
+        UPDATE crop_cycles 
+        SET 
+            quantity_in_bags = ${newTotal},
+            status = 'Weighed',
+            weighing_date = NOW(),
+            weighed_by = ${userId},
+            sample_remarks = ${remarks} 
+        WHERE crop_cycle_id = ${cycleId}
+    `;
 
+    await sql`COMMIT`;
     revalidatePath("/employee/dashboard");
-
-    return {
-      success: true,
-      message: isFlagged
-        ? `Saved! Warning: Yield is unnaturally high (${bags} bags). Flagged for Admin.`
-        : "Weighing recorded successfully.",
-    };
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Database Error";
-    console.error("Weighing Error:", message);
-    return { success: false, message: "Database Error: " + message };
+    return { success: true };
+  } catch (e) {
+    await sql`ROLLBACK`;
+    console.error("Submit Weighing Error:", e);
+    return { success: false, message: "Failed to save weight" };
   }
 }

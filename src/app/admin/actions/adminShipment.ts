@@ -21,7 +21,7 @@ export type ShipmentData = {
   creation_date: Date;
   dispatch_date?: Date;
   filled_by_name: string;
-  status: string; // 'Filled' | 'Dispatched' | 'Bill Generated'
+  status: string;
 };
 
 export type BillItem = {
@@ -148,13 +148,19 @@ export async function getShipmentBillData(shipmentId: number) {
             WHERE s.shipment_id = ${shipmentId}
         `;
 
-    // [UPDATED] Added cc.purchase_rate to this query
     const itemsRes = await sql`
             SELECT 
                 f.name as farmer_name,
                 COALESCE(v.village_name, '') as village_name,
-                cc.lot_no,
-                cc.purchase_rate, -- <<< NEW: Fetching the rate from DB
+                
+                -- [FIX] Fetch lots from child table
+                (
+                    SELECT STRING_AGG(lot_number, ', ') 
+                    FROM cycle_lots 
+                    WHERE crop_cycle_id = cc.crop_cycle_id
+                ) as lot_no,
+
+                cc.purchase_rate, 
                 si.bags_loaded as bags
             FROM shipment_items si
             JOIN crop_cycles cc ON si.crop_cycle_id = cc.crop_cycle_id
@@ -184,7 +190,6 @@ export async function getShipmentBillData(shipmentId: number) {
     return null;
   }
 }
-
 // --- 5. DELETE & RESTORE ---
 export async function deleteShipment(shipmentId: number) {
   const session = await auth();

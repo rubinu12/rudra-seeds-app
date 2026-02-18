@@ -7,6 +7,7 @@ import { auth } from "@/auth";
 export async function getSampleDetails(cycleId: number) {
   console.log("🔍 Fetching Cycle ID:", cycleId);
   try {
+    // [FIX]: Added subquery for lot_number
     const result = await sql`
             SELECT 
                 cc.*, 
@@ -15,7 +16,12 @@ export async function getSampleDetails(cycleId: number) {
                 v.village_name,
                 l.landmark_name,
                 s.variety_name as seed_variety,
-                s.color_code
+                s.color_code,
+                (
+                    SELECT STRING_AGG(lot_number, ', ') 
+                    FROM cycle_lots 
+                    WHERE crop_cycle_id = cc.crop_cycle_id
+                ) as lot_number
             FROM crop_cycles cc
             JOIN farmers f ON cc.farmer_id = f.farmer_id
             LEFT JOIN farms fm ON cc.farm_id = fm.farm_id
@@ -29,7 +35,6 @@ export async function getSampleDetails(cycleId: number) {
 
     const data = result.rows[0];
 
-    // Safe Date Formatting
     const dateRaw = data.harvesting_date || data.created_at || new Date();
     try {
       data.formatted_date = new Date(dateRaw).toLocaleDateString("en-IN", {

@@ -4,8 +4,7 @@ import { sql } from "@vercel/postgres";
 import { revalidatePath, unstable_noStore as noStore } from "next/cache";
 import { z } from "zod";
 
-// --- TYPE DEFINITIONS (Defined Locally to Fix Build Error) ---
-
+// --- TYPE DEFINITIONS ---
 export type CycleForPriceApproval = {
   crop_cycle_id: number;
   farmer_name: string;
@@ -20,13 +19,12 @@ export type CycleForPriceApproval = {
   temporary_price_per_man?: number | null;
 };
 
-// FIXED: Defined strictly here to avoid dependency issues
 export type CycleForPriceVerification = {
   crop_cycle_id: number;
   farmer_name: string;
   mobile_number: string | null;
   seed_variety: string;
-  variety_name?: string; // Added alias
+  variety_name?: string;
   
   sampling_date: string | null;
   sample_moisture: number | null;
@@ -36,8 +34,9 @@ export type CycleForPriceVerification = {
   sample_non_seed: string | null;
   temporary_price_per_man: number | null;
   
-  // Extra fields required for Verification UI
+  // [NEW] This now holds the comma-separated lots (e.g. "L-101, L-102")
   lot_number: string | null;
+  
   village_name: string | null;
   sample_seed_quality: string | null; 
 };
@@ -74,14 +73,12 @@ export async function getCyclesPendingTempPrice(): Promise<CycleForPriceApproval
 export async function getCyclesPendingVerification(): Promise<CycleForPriceVerification[]> {
   noStore();
   try {
-    // UPDATED QUERY: Now joins with 'farms' and 'villages' to get the real data
     const result = await sql`
       SELECT
         cc.crop_cycle_id, 
         f.name as farmer_name, 
         f.mobile_number,
         
-        -- Both aliases to ensure compatibility
         s.variety_name as seed_variety, 
         s.variety_name as variety_name,
 
@@ -93,8 +90,13 @@ export async function getCyclesPendingVerification(): Promise<CycleForPriceVerif
         cc.sample_non_seed, 
         cc.temporary_price_per_man,
         
-        -- Verification Specific Fields
-        cc.lot_no as lot_number,
+        -- [FIX] Subquery to fetch multiple lots as a string
+        (
+            SELECT STRING_AGG(lot_number, ', ') 
+            FROM cycle_lots 
+            WHERE crop_cycle_id = cc.crop_cycle_id
+        ) as lot_number,
+
         COALESCE(cc.grading, 'Standard') as sample_seed_quality,
         v.village_name
       FROM crop_cycles cc
