@@ -106,7 +106,12 @@ export default function WelcomeHeader({
                 bgColor="bg-secondary-container"
                 isPending={loadingAction === 'edit'}
             />
-            <ActionButton Icon={Database} label="Master Data" bgColor="bg-surface-container" />
+            <ActionButton 
+    onClick={() => router.push('/admin/master-data')}
+    Icon={Database} 
+    label="Master Data" 
+    bgColor="bg-surface-container" 
+/>
           </>
         )}
         

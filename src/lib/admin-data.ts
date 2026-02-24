@@ -5,7 +5,8 @@ import { sql } from '@vercel/postgres';
 import type {
     CycleForSampleEntry,
     CycleForPriceApproval,
-    CycleForPriceVerification
+    CycleForPriceVerification,
+    MasterReportRow,
 } from './definitions';
 
 // --- Type Definitions ---
@@ -97,6 +98,58 @@ export async function getCyclePipelineStatus(): Promise<CyclePipelineStatus> {
     console.error('Database Error fetching pipeline status:', error);
     return { total: { harvested: 0, sampled: 0, priced: 0, weighed: 0 }, last24Hours: { harvested: 0, sampled: 0, priced: 0, weighed: 0 } };
   }
+}
+
+export async function getMasterReportData(): Promise<MasterReportRow[]> {
+    try {
+        const queryText = `
+            SELECT 
+                cc.crop_cycle_id,
+                f.name AS farmer_name,
+                f.mobile_number,
+                (
+                    SELECT ba.bank_name || ' - ' || ba.account_name || ' (' || ba.account_no || ')'
+                    FROM bank_accounts ba 
+                    WHERE ba.farmer_id = f.farmer_id 
+                    LIMIT 1
+                ) AS bank_account_details,
+                fa.area_in_vigha,
+                
+                -- NEW FIX: Pulling all lot numbers from the cycle_lots table 
+                -- and combining them into a comma-separated string
+                (
+                    SELECT string_agg(cl.lot_number, ', ') 
+                    FROM cycle_lots cl 
+                    WHERE cl.crop_cycle_id = cc.crop_cycle_id
+                ) AS lot_no,
+
+                s.variety_name AS seed_variety,
+                v.village_name
+            FROM crop_cycles cc
+            LEFT JOIN farmers f ON cc.farmer_id = f.farmer_id
+            LEFT JOIN farms fa ON cc.farm_id = fa.farm_id
+            LEFT JOIN villages v ON fa.village_id = v.village_id
+            LEFT JOIN seeds s ON cc.seed_id = s.seed_id
+            ORDER BY f.name ASC;
+        `;
+        
+        const result = await sql.query(queryText, []);
+        
+        return result.rows.map(row => ({
+            crop_cycle_id: Number(row.crop_cycle_id),
+            farmer_name: row.farmer_name || 'Unknown',
+            mobile_number: row.mobile_number,
+            bank_account_details: row.bank_account_details,
+            area_in_vigha: row.area_in_vigha ? Number(row.area_in_vigha) : null,
+            lot_no: row.lot_no, // This will now correctly be "LOT-1, LOT-2" or null
+            seed_variety: row.seed_variety,
+            village_name: row.village_name
+        }));
+
+    } catch (error) {
+        console.error('Database Error fetching master report data:', error);
+        return [];
+    }
 }
 
 export async function getCriticalAlerts(): Promise<CriticalAlertsData> {

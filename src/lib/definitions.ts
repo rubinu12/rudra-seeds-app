@@ -23,6 +23,17 @@ export type MasterDataItem = {
     is_active: boolean;
 };
 
+export type MasterReportRow = {
+    crop_cycle_id: number;
+    farmer_name: string;
+    mobile_number: string | null;
+    bank_account_details: string | null;
+    area_in_vigha: number | null;
+    lot_no: string | null;
+    seed_variety: string;
+    village_name: string | null;
+};
+
 // --- FARMER & BANK ---
 export type BankAccount = {
     bank_name: ReactNode; 
