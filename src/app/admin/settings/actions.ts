@@ -210,13 +210,17 @@ export async function updateSeedVarietyDetails(
 
 export async function addDestinationCompany(_prevState: FormState, formData: FormData): Promise<FormState> {
     const name = formData.get('company_name') as string;
+    const address = formData.get('address') as string;
+    const city = formData.get('city') as string;
+    const gst_no = formData.get('gst_no') as string;
+    const mobile = formData.get('mobile') as string;
 
     if (!name) return { message: 'Name required', success: false };
 
     try {
         await sql`
-            INSERT INTO destination_companies (company_name, is_active) 
-            VALUES (${name}, true)
+            INSERT INTO destination_companies (company_name, address, city, gst_no, mobile, is_active, ship_to_addresses) 
+            VALUES (${name}, ${address}, ${city}, ${gst_no}, ${mobile}, true, '[]'::jsonb)
         `;
         revalidatePath('/admin/settings');
         return { message: 'Partner added', success: true };
@@ -226,10 +230,34 @@ export async function addDestinationCompany(_prevState: FormState, formData: For
     }
 }
 
+export async function updateDestinationCompanyDetails(
+    id: number,
+    data: { address: string; city: string; gst_no: string; mobile: string; ship_to_addresses: string[] }
+) {
+    try {
+        await sql`
+            UPDATE destination_companies
+            SET address = ${data.address},
+                city = ${data.city},
+                gst_no = ${data.gst_no},
+                mobile = ${data.mobile},
+                ship_to_addresses = ${JSON.stringify(data.ship_to_addresses)}::jsonb
+            WHERE dest_company_id = ${id}
+        `;
+        revalidatePath('/admin/settings');
+        return { success: true };
+    } catch (e) {
+        console.error(e);
+        return { success: false, error: 'Failed to update partner details' };
+    }
+}
+
 export async function toggleDestinationCompany(id: number | string) {
     await sql`UPDATE destination_companies SET is_active = NOT is_active WHERE dest_company_id = ${id}`;
     revalidatePath('/admin/settings');
 }
+
+
 
 export async function addShipmentCompany(_prevState: FormState, formData: FormData): Promise<FormState> {
     const name = formData.get('company_name') as string;

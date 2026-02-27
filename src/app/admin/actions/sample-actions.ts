@@ -29,7 +29,7 @@ export async function getCyclesPendingSampleEntry(): Promise<CycleForSampleEntry
       FROM crop_cycles cc
       JOIN farmers f ON cc.farmer_id = f.farmer_id
       JOIN seeds s ON cc.seed_id = s.seed_id
-      WHERE cc.status = 'Harvested'
+      WHERE cc.status = 'Sample Collected'
       ORDER BY cc.harvesting_date ASC;
     `;
     return result.rows as CycleForSampleEntry[];

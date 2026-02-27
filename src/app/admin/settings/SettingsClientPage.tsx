@@ -16,6 +16,7 @@ import {
   SeedVarietySetting,
   ShipmentCompanySetting,
   EmployeeSetting,
+  DestinationCompanySetting,
 } from "./data";
 import {
   Leaf,
@@ -51,7 +52,7 @@ type SettingsClientPageProps = {
   initialAdminSeason: "Sowing" | "Growing" | "Harvesting";
   landmarks: MasterDataItem[];
   villages: MasterDataItem[];
-  destCompanies: MasterDataItem[];
+  destCompanies: DestinationCompanySetting[];
   seedVarieties: SeedVarietySetting[];
   shipmentCompanies: ShipmentCompanySetting[];
   employees: EmployeeSetting[];
@@ -321,10 +322,9 @@ export default function SettingsClientPage({
                   <PartnerCompanyForm />
                 </div>
                 <div className="flex-grow overflow-y-auto p-6 pt-0 custom-scrollbar space-y-2">
-                  <DataList
-                    items={destCompanies}
-                    onToggle={actions.toggleDestinationCompany}
-                  />
+                  {destCompanies.map((item) => (
+                    <DestinationCompanyItem key={item.id} item={item} />
+                  ))}
                 </div>
               </div>
 
@@ -546,7 +546,7 @@ const EmployeeCard = ({
   );
 };
 
-// Partner Company Form (Preserved Address/City Fields)
+// Partner Company Form (Preserved Address/City Fields + JSON support)
 const PartnerCompanyForm = () => {
   const [state, formAction, isPending] = useActionState(
     actions.addDestinationCompany,
@@ -567,10 +567,23 @@ const PartnerCompanyForm = () => {
       />
 
       <div className="grid grid-cols-2 gap-3">
-        <div className="relative col-span-1">
+        <input
+          name="gst_no"
+          placeholder="GST Number"
+          className="w-full h-10 px-4 bg-surface-container/50 rounded-xl border border-transparent focus:bg-surface focus:border-primary/20 outline-none text-xs transition-all uppercase"
+        />
+        <input
+          name="mobile"
+          placeholder="Mobile Number"
+          className="w-full h-10 px-4 bg-surface-container/50 rounded-xl border border-transparent focus:bg-surface focus:border-primary/20 outline-none text-xs transition-all"
+        />
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        <div className="relative col-span-2">
           <input
             name="address"
-            placeholder="Address"
+            placeholder="Bill To Address"
             className="w-full h-10 pl-9 px-4 bg-surface-container/50 rounded-xl border border-transparent focus:bg-surface focus:border-primary/20 outline-none text-xs transition-all"
           />
           <MapPinned className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-on-surface-variant/50" />
@@ -1112,6 +1125,120 @@ const ShipmentCompanyItem = ({ item }: { item: ShipmentCompanySetting }) => {
           <ToggleLeft className="w-5 h-5" />
         )}
       </button>
+    </div>
+  );
+};
+
+const DestinationCompanyItem = ({ item }: { item: DestinationCompanySetting }) => {
+  const [isPending, startTransition] = useTransition();
+  const [isEditing, setIsEditing] = useState(false);
+  
+  const [editData, setEditData] = useState({
+    address: item.address || "",
+    city: item.city || "",
+    gst_no: item.gst_no || "",
+    mobile: item.mobile || "",
+    ship_to_addresses: [...item.ship_to_addresses],
+  });
+
+  const [newShipAddress, setNewShipAddress] = useState("");
+
+  const handleSaveEdit = () => {
+    startTransition(async () => {
+      const result = await actions.updateDestinationCompanyDetails(item.id, editData);
+      if (result.success) {
+        setIsEditing(false);
+      } else {
+        alert(`Error: ${result.error || "Failed to update"}`);
+      }
+    });
+  };
+
+  const addShipAddress = () => {
+    if (newShipAddress.trim()) {
+      setEditData({
+        ...editData,
+        ship_to_addresses: [...editData.ship_to_addresses, newShipAddress.trim()]
+      });
+      setNewShipAddress("");
+    }
+  };
+
+  const removeShipAddress = (index: number) => {
+    const updated = [...editData.ship_to_addresses];
+    updated.splice(index, 1);
+    setEditData({ ...editData, ship_to_addresses: updated });
+  };
+
+  return (
+    <div className={`p-4 rounded-2xl border transition-all duration-200 relative group ${item.is_active ? "bg-surface border-outline/10 hover:border-orange-500/20 hover:shadow-md" : "bg-surface-container/30 border-transparent opacity-60"}`}>
+      
+      <div className="flex justify-between items-start mb-2">
+        <div>
+          <h4 className="font-bold text-on-surface text-sm">{item.name}</h4>
+          {!isEditing && (
+            <div className="flex flex-col mt-1 gap-0.5">
+               {item.gst_no && <span className="text-[10px] font-mono text-on-surface-variant">GST: {item.gst_no}</span>}
+               {item.address && <span className="text-[10px] text-on-surface-variant max-w-[200px] truncate">{item.address}, {item.city}</span>}
+               {item.ship_to_addresses.length > 0 && (
+                   <span className="text-[9px] font-bold text-orange-600 bg-orange-100 px-1.5 py-0.5 rounded w-max mt-1">
+                       {item.ship_to_addresses.length} Ship-To Address(es)
+                   </span>
+               )}
+            </div>
+          )}
+        </div>
+        
+        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button onClick={() => setIsEditing(!isEditing)} className="p-1.5 text-on-surface-variant hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
+            <Pencil className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => startTransition(() => { actions.toggleDestinationCompany(item.id); })}
+            disabled={isPending}
+            className="p-1 text-on-surface-variant hover:text-primary"
+          >
+            {item.is_active ? <ToggleRight className="w-5 h-5" /> : <ToggleLeft className="w-5 h-5" />}
+          </button>
+        </div>
+      </div>
+
+      {isEditing && (
+        <div className="space-y-3 mt-3 pt-3 border-t border-outline/10">
+          <div className="grid grid-cols-2 gap-2">
+            <input value={editData.gst_no} onChange={(e) => setEditData({ ...editData, gst_no: e.target.value })} className="h-8 px-2 bg-white rounded border border-orange-500/30 text-xs focus:outline-none focus:ring-2 ring-orange-500/20 uppercase" placeholder="GST Number" />
+            <input value={editData.mobile} onChange={(e) => setEditData({ ...editData, mobile: e.target.value })} className="h-8 px-2 bg-white rounded border border-orange-500/30 text-xs focus:outline-none focus:ring-2 ring-orange-500/20" placeholder="Mobile" />
+          </div>
+          
+          <div className="grid grid-cols-3 gap-2">
+            <input value={editData.address} onChange={(e) => setEditData({ ...editData, address: e.target.value })} className="col-span-2 h-8 px-2 bg-white rounded border border-orange-500/30 text-xs focus:outline-none focus:ring-2 ring-orange-500/20" placeholder="Bill To Address" />
+            <input value={editData.city} onChange={(e) => setEditData({ ...editData, city: e.target.value })} className="col-span-1 h-8 px-2 bg-white rounded border border-orange-500/30 text-xs focus:outline-none focus:ring-2 ring-orange-500/20" placeholder="City" />
+          </div>
+
+          <div className="bg-orange-50 p-2 rounded-lg border border-orange-100 space-y-2">
+            <span className="text-[10px] font-bold text-orange-800 uppercase tracking-wider">Ship-To Addresses (Consignee)</span>
+            {editData.ship_to_addresses.map((addr, idx) => (
+                <div key={idx} className="flex justify-between items-center bg-white p-1.5 rounded text-[11px] border border-orange-200">
+                    <span className="truncate flex-1">{addr}</span>
+                    <button onClick={() => removeShipAddress(idx)} className="text-red-500 hover:text-red-700 ml-2 px-1 text-lg leading-none">&times;</button>
+                </div>
+            ))}
+            <div className="flex gap-1">
+                <input value={newShipAddress} onChange={(e) => setNewShipAddress(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addShipAddress())} className="flex-1 h-7 px-2 bg-white rounded border border-orange-500/30 text-[11px] focus:outline-none" placeholder="Add new delivery address..." />
+                <button type="button" onClick={addShipAddress} className="h-7 px-2 bg-orange-600 text-white rounded text-[11px] font-bold hover:bg-orange-700">Add</button>
+            </div>
+          </div>
+
+          <div className="flex gap-2 pt-1">
+            <button onClick={handleSaveEdit} disabled={isPending} className="flex-1 h-8 bg-green-600 text-white rounded text-xs font-bold flex items-center justify-center gap-1 hover:bg-green-700">
+              {isPending ? <LoaderCircle className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />} Save
+            </button>
+            <button onClick={() => setIsEditing(false)} disabled={isPending} className="flex-1 h-8 bg-slate-200 text-slate-700 rounded text-xs font-bold hover:bg-slate-300">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -23,7 +23,18 @@ export type ShipmentCompanySetting = {
     owner_name: string;
     owner_mobile: string;
     is_active: boolean;
-}
+};
+
+export type DestinationCompanySetting = {
+    id: number;
+    name: string;
+    address: string | null;
+    city: string | null;
+    gst_no: string | null;
+    mobile: string | null;
+    ship_to_addresses: string[]; // Parsed from JSONB
+    is_active: boolean;
+};
 
 export type EmployeeSetting = {
     id: number;
@@ -86,9 +97,25 @@ export async function getSettingsVillages(): Promise<MasterDataItem[]> {
     return rows as MasterDataItem[];
 }
 
-export async function getSettingsDestinationCompanies(): Promise<MasterDataItem[]> {
-    const { rows } = await sql`SELECT dest_company_id as id, company_name as name, is_active FROM destination_companies ORDER BY company_name;`;
-    return rows as MasterDataItem[];
+export async function getSettingsDestinationCompanies(): Promise<DestinationCompanySetting[]> {
+    const { rows } = await sql`
+        SELECT 
+            dest_company_id as id, 
+            company_name as name, 
+            address, 
+            city, 
+            gst_no, 
+            mobile, 
+            ship_to_addresses, 
+            is_active 
+        FROM destination_companies 
+        ORDER BY company_name;
+    `;
+    
+    return rows.map(r => ({
+        ...r,
+        ship_to_addresses: r.ship_to_addresses || []
+    })) as DestinationCompanySetting[];
 }
 
 export async function getSettingsSeedVarieties(): Promise<SeedVarietySetting[]> {
