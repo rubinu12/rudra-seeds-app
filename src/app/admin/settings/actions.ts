@@ -232,12 +232,13 @@ export async function addDestinationCompany(_prevState: FormState, formData: For
 
 export async function updateDestinationCompanyDetails(
     id: number,
-    data: { address: string; city: string; gst_no: string; mobile: string; ship_to_addresses: string[] }
+    data: { company_name: string; address: string; city: string; gst_no: string; mobile: string; ship_to_addresses: string[] }
 ) {
     try {
         await sql`
             UPDATE destination_companies
-            SET address = ${data.address},
+            SET company_name = ${data.company_name},
+                address = ${data.address},
                 city = ${data.city},
                 gst_no = ${data.gst_no},
                 mobile = ${data.mobile},

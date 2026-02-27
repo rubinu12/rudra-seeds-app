@@ -581,12 +581,13 @@ const PartnerCompanyForm = () => {
 
       <div className="grid grid-cols-3 gap-3">
         <div className="relative col-span-2">
-          <input
+          {/* Changed to Textarea for line breaks */}
+          <textarea
             name="address"
             placeholder="Bill To Address"
-            className="w-full h-10 pl-9 px-4 bg-surface-container/50 rounded-xl border border-transparent focus:bg-surface focus:border-primary/20 outline-none text-xs transition-all"
+            className="w-full min-h-[40px] pt-2 pb-2 pl-9 px-4 bg-surface-container/50 rounded-xl border border-transparent focus:bg-surface focus:border-primary/20 outline-none text-xs transition-all resize-y"
           />
-          <MapPinned className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-on-surface-variant/50" />
+          <MapPinned className="absolute left-3 top-2.5 w-3.5 h-3.5 text-on-surface-variant/50" />
         </div>
         <div className="col-span-1">
           <input
@@ -1134,6 +1135,7 @@ const DestinationCompanyItem = ({ item }: { item: DestinationCompanySetting }) =
   const [isEditing, setIsEditing] = useState(false);
   
   const [editData, setEditData] = useState({
+    company_name: item.name,
     address: item.address || "",
     city: item.city || "",
     gst_no: item.gst_no || "",
@@ -1177,9 +1179,9 @@ const DestinationCompanyItem = ({ item }: { item: DestinationCompanySetting }) =
         <div>
           <h4 className="font-bold text-on-surface text-sm">{item.name}</h4>
           {!isEditing && (
-            <div className="flex flex-col mt-1 gap-0.5">
+            <div className="flex flex-col mt-1 gap-1">
                {item.gst_no && <span className="text-[10px] font-mono text-on-surface-variant">GST: {item.gst_no}</span>}
-               {item.address && <span className="text-[10px] text-on-surface-variant max-w-[200px] truncate">{item.address}, {item.city}</span>}
+               {item.address && <span className="text-[10px] text-on-surface-variant whitespace-pre-wrap leading-relaxed">{item.address}{item.city ? `\n${item.city}` : ''}</span>}
                {item.ship_to_addresses.length > 0 && (
                    <span className="text-[9px] font-bold text-orange-600 bg-orange-100 px-1.5 py-0.5 rounded w-max mt-1">
                        {item.ship_to_addresses.length} Ship-To Address(es)
@@ -1205,27 +1207,42 @@ const DestinationCompanyItem = ({ item }: { item: DestinationCompanySetting }) =
 
       {isEditing && (
         <div className="space-y-3 mt-3 pt-3 border-t border-outline/10">
+          <div className="grid grid-cols-1">
+            <input value={editData.company_name} onChange={(e) => setEditData({ ...editData, company_name: e.target.value })} className="h-8 px-2 bg-white rounded border border-orange-500/30 text-sm font-bold focus:outline-none focus:ring-2 ring-orange-500/20" placeholder="Company Name" />
+          </div>
+
           <div className="grid grid-cols-2 gap-2">
             <input value={editData.gst_no} onChange={(e) => setEditData({ ...editData, gst_no: e.target.value })} className="h-8 px-2 bg-white rounded border border-orange-500/30 text-xs focus:outline-none focus:ring-2 ring-orange-500/20 uppercase" placeholder="GST Number" />
             <input value={editData.mobile} onChange={(e) => setEditData({ ...editData, mobile: e.target.value })} className="h-8 px-2 bg-white rounded border border-orange-500/30 text-xs focus:outline-none focus:ring-2 ring-orange-500/20" placeholder="Mobile" />
           </div>
           
           <div className="grid grid-cols-3 gap-2">
-            <input value={editData.address} onChange={(e) => setEditData({ ...editData, address: e.target.value })} className="col-span-2 h-8 px-2 bg-white rounded border border-orange-500/30 text-xs focus:outline-none focus:ring-2 ring-orange-500/20" placeholder="Bill To Address" />
+            <textarea value={editData.address} onChange={(e) => setEditData({ ...editData, address: e.target.value })} className="col-span-2 min-h-[60px] p-2 bg-white rounded border border-orange-500/30 text-xs focus:outline-none focus:ring-2 ring-orange-500/20 resize-y" placeholder="Bill To Address" />
             <input value={editData.city} onChange={(e) => setEditData({ ...editData, city: e.target.value })} className="col-span-1 h-8 px-2 bg-white rounded border border-orange-500/30 text-xs focus:outline-none focus:ring-2 ring-orange-500/20" placeholder="City" />
           </div>
 
           <div className="bg-orange-50 p-2 rounded-lg border border-orange-100 space-y-2">
             <span className="text-[10px] font-bold text-orange-800 uppercase tracking-wider">Ship-To Addresses (Consignee)</span>
             {editData.ship_to_addresses.map((addr, idx) => (
-                <div key={idx} className="flex justify-between items-center bg-white p-1.5 rounded text-[11px] border border-orange-200">
-                    <span className="truncate flex-1">{addr}</span>
-                    <button onClick={() => removeShipAddress(idx)} className="text-red-500 hover:text-red-700 ml-2 px-1 text-lg leading-none">&times;</button>
+                <div key={idx} className="flex justify-between items-start bg-white p-2 rounded text-[11px] border border-orange-200 gap-2">
+                    <span className="whitespace-pre-wrap flex-1 leading-relaxed">{addr}</span>
+                    <button onClick={() => removeShipAddress(idx)} className="text-red-500 hover:text-red-700 px-1 text-lg leading-none">&times;</button>
                 </div>
             ))}
-            <div className="flex gap-1">
-                <input value={newShipAddress} onChange={(e) => setNewShipAddress(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addShipAddress())} className="flex-1 h-7 px-2 bg-white rounded border border-orange-500/30 text-[11px] focus:outline-none" placeholder="Add new delivery address..." />
-                <button type="button" onClick={addShipAddress} className="h-7 px-2 bg-orange-600 text-white rounded text-[11px] font-bold hover:bg-orange-700">Add</button>
+            <div className="flex flex-col gap-1">
+                <textarea 
+                  value={newShipAddress} 
+                  onChange={(e) => setNewShipAddress(e.target.value)} 
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                      e.preventDefault();
+                      addShipAddress();
+                    }
+                  }} 
+                  className="flex-1 min-h-[60px] p-2 bg-white rounded border border-orange-500/30 text-[11px] focus:outline-none resize-y" 
+                  placeholder="Add new delivery address (Ctrl+Enter to add)..." 
+                />
+                <button type="button" onClick={addShipAddress} className="h-7 px-3 bg-orange-600 text-white rounded text-[11px] font-bold hover:bg-orange-700 self-end">Add Address</button>
             </div>
           </div>
 

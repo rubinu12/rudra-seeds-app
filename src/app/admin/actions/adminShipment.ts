@@ -139,50 +139,54 @@ export async function confirmShipmentDispatch(shipmentId: number) {
 
 export async function getShipmentBillData(shipmentId: number) {
   try {
+    // 1. Fetch Shipment, Destination Company, and Transport Company Details
     const shipmentRes = await sql`
-            SELECT 
-                s.shipment_id, s.vehicle_number, s.total_bags, s.driver_name, s.driver_mobile, s.dispatch_date, s.location,
-                dc.company_name as dest_name, dc.address as dest_address, dc.city as dest_city
-            FROM shipments s
-            LEFT JOIN destination_companies dc ON s.dest_company_id = dc.dest_company_id
-            WHERE s.shipment_id = ${shipmentId}
-        `;
+        SELECT 
+            s.shipment_id, 
+            s.vehicle_number, 
+            s.total_bags, 
+            s.driver_name, 
+            s.driver_mobile, 
+            s.dispatch_date, 
+            s.location, 
+            s.invoice_number, 
+            s.dispatch_from, 
+            s.ship_to_address as saved_ship_to,
+            dc.company_name as dest_name, 
+            dc.address as dest_address, 
+            dc.city as dest_city,
+            dc.gst_no, 
+            dc.mobile as dest_mobile, 
+            dc.ship_to_addresses,
+            tc.company_name as transport_name
+        FROM shipments s
+        LEFT JOIN destination_companies dc ON s.dest_company_id = dc.dest_company_id
+        LEFT JOIN shipment_companies tc ON s.shipment_company_id = tc.company_id
+        WHERE s.shipment_id = ${shipmentId}
+    `;
 
+    // 2. Fetch Item Details - NOW JOINING cycle_lots DIRECTLY FOR SEPARATE ROWS
     const itemsRes = await sql`
-            SELECT 
-                f.name as farmer_name,
-                COALESCE(v.village_name, '') as village_name,
-                
-                -- [FIX] Fetch lots from child table
-                (
-                    SELECT STRING_AGG(lot_number, ', ') 
-                    FROM cycle_lots 
-                    WHERE crop_cycle_id = cc.crop_cycle_id
-                ) as lot_no,
-
-                cc.purchase_rate, 
-                si.bags_loaded as bags
-            FROM shipment_items si
-            JOIN crop_cycles cc ON si.crop_cycle_id = cc.crop_cycle_id
-            JOIN farmers f ON cc.farmer_id = f.farmer_id
-            JOIN farms fm ON cc.farm_id = fm.farm_id
-            LEFT JOIN villages v ON fm.village_id = v.village_id
-            WHERE si.shipment_id = ${shipmentId}
-            ORDER BY f.name
-        `;
-
-    const varietiesRes = await sql`
-            SELECT DISTINCT s.variety_name
-            FROM shipment_items si
-            JOIN crop_cycles cc ON si.crop_cycle_id = cc.crop_cycle_id
-            JOIN seeds s ON cc.seed_id = s.seed_id
-            WHERE si.shipment_id = ${shipmentId}
-        `;
-
-    const varieties = varietiesRes.rows.map((r) => r.variety_name);
+        SELECT 
+            f.name as farmer_name,
+            COALESCE(v.village_name, '') as village_name,
+            cl.lot_number as lot_no,
+            se.variety_name,
+            cc.purchase_rate, 
+            cl.bags_weighed as bags -- Use the exact bags from the lot, not the whole cycle
+        FROM shipment_items si
+        JOIN crop_cycles cc ON si.crop_cycle_id = cc.crop_cycle_id
+        JOIN cycle_lots cl ON cl.crop_cycle_id = cc.crop_cycle_id -- Splitting into separate rows
+        JOIN farmers f ON cc.farmer_id = f.farmer_id
+        JOIN seeds se ON cc.seed_id = se.seed_id
+        JOIN farms fm ON cc.farm_id = fm.farm_id
+        LEFT JOIN villages v ON fm.village_id = v.village_id
+        WHERE si.shipment_id = ${shipmentId}
+        ORDER BY f.name, se.variety_name, cl.lot_number
+    `;
 
     return {
-      shipment: { ...shipmentRes.rows[0], varieties },
+      shipment: shipmentRes.rows[0],
       items: itemsRes.rows,
     };
   } catch (e) {
@@ -220,7 +224,10 @@ export async function finalizeAndPrintBill(
   shipmentId: number,
   totalAmount: number,
   billDate: string,
-  city: string
+  city: string,
+  invoiceNumber: string,
+  dispatchFrom: string,
+  shipToAddress: string
 ) {
   const session = await auth();
   if (session?.user?.role !== "admin")
@@ -239,19 +246,24 @@ export async function finalizeAndPrintBill(
 
     if (!companyId) throw new Error("No destination company found");
 
-    // [UPDATED] Set status to 'Bill Generated'
+    // Update shipment with all print data
     await sql`
       UPDATE shipments 
       SET 
         company_payment = ${totalAmount}, 
         status = 'Bill Generated', 
         dispatch_date = ${billDate}::timestamp,
-        location = ${city} 
+        location = ${city},
+        invoice_number = ${invoiceNumber},
+        dispatch_from = ${dispatchFrom},
+        ship_to_address = ${shipToAddress}
       WHERE shipment_id = ${shipmentId}
     `;
 
+    // Clear old unfinalized ledger entries to prevent duplicates
     await sql`DELETE FROM company_ledger WHERE reference_id = ${shipmentId} AND transaction_type = 'DEBIT'`;
 
+    // Insert new definitive ledger entry
     await sql`
       INSERT INTO company_ledger (
         company_id, transaction_type, amount, description, reference_id, transaction_date
