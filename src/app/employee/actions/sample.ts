@@ -1,21 +1,21 @@
 "use server";
 
-import { sql } from '@vercel/postgres';
-import { auth } from "@/auth";
+import { sql } from "@vercel/postgres";
+import { auth } from "@/src/auth";
 
 export async function getPendingSamples() {
-    try {
-        const session = await auth();
-        const userId = session?.user?.id ? Number(session.user.id) : null;
+  try {
+    const session = await auth();
+    const userId = session?.user?.id ? Number(session.user.id) : null;
 
-        if (!userId) {
-            console.error("⛔ Unauthorized: No user logged in for sample list.");
-            return [];
-        }
+    if (!userId) {
+      console.error("⛔ Unauthorized: No user logged in for sample list.");
+      return [];
+    }
 
-        console.log(`🧪 Fetching Pending Samples for User ID: ${userId}`);
+    console.log(`🧪 Fetching Pending Samples for User ID: ${userId}`);
 
-        const result = await sql`
+    const result = await sql`
             SELECT 
                 cc.crop_cycle_id,
                 f.name as farmer_name,
@@ -47,24 +47,23 @@ export async function getPendingSamples() {
             
             ORDER BY cc.crop_cycle_id DESC
         `;
-        
-        return result.rows;
 
-    } catch (error: unknown) {
-        const msg = error instanceof Error ? error.message : "Unknown error";
-        console.error("Fetch Error:", msg);
-        return [];
-    }
+    return result.rows;
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : "Unknown error";
+    console.error("Fetch Error:", msg);
+    return [];
+  }
 }
 
 export async function markSampleReceived(cycleId: number) {
-    try {
-        const session = await auth();
-        const userId = session?.user?.id ? Number(session.user.id) : null;
+  try {
+    const session = await auth();
+    const userId = session?.user?.id ? Number(session.user.id) : null;
 
-        if (!userId) return { success: false, message: "Unauthorized" };
+    if (!userId) return { success: false, message: "Unauthorized" };
 
-        await sql`
+    await sql`
             UPDATE crop_cycles 
             SET 
                 status = 'Sample Collected', 
@@ -72,8 +71,8 @@ export async function markSampleReceived(cycleId: number) {
                 sampled_by = ${userId}
             WHERE crop_cycle_id = ${cycleId}
         `;
-        return { success: true };
-    } catch (_e) { 
-        return { success: false }; 
-    }
+    return { success: true };
+  } catch (_e) {
+    return { success: false };
+  }
 }

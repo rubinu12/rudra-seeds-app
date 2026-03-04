@@ -2,7 +2,7 @@
 
 import { sql } from "@vercel/postgres";
 import { revalidatePath } from "next/cache";
-import { auth } from "@/auth";
+import { auth } from "@/src/auth";
 
 export async function getSampleDetails(cycleId: number) {
   console.log("🔍 Fetching Cycle ID:", cycleId);
@@ -60,7 +60,7 @@ export async function submitLabData(cycleId: number, formData: FormData) {
     const userId = session?.user?.id ? Number(session.user.id) : null;
 
     if (!userId) {
-        return { success: false, message: "Unauthorized: Please login." };
+      return { success: false, message: "Unauthorized: Please login." };
     }
 
     const moisture = formData.get("sample_moisture");

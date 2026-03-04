@@ -97,6 +97,9 @@ function mapStatusToAction(row: GlobalSearchRow): SearchResult {
   const status = (row.status || '').toLowerCase();
 
   if (status === 'growing') return { ...base, actionLabel: 'Mark Harvested', actionType: 'API' };
+  if (status === 'harvested' || status === 'sample collected') {
+      return { ...base, actionLabel: 'Enter Sample Data', actionType: 'MODAL' };
+  }
   if (status === 'sample collected') return { ...base, actionLabel: 'Enter Lab Data', actionType: 'MODAL' };
   if (status === 'sampled') return { ...base, actionLabel: 'Propose Price', actionType: 'MODAL' };
   if (status === 'price proposed') return { ...base, actionLabel: 'Verify Price', actionType: 'MODAL' };
@@ -109,6 +112,16 @@ function mapStatusToAction(row: GlobalSearchRow): SearchResult {
 export async function performGlobalAction(cycleId: number, action: string) {
     if(action === 'Mark Harvested') {
         return await markAsHarvested(cycleId, 'Farm');
+    }
+
+    if (action === 'Force Sample Collected') {
+        try {
+            await sql`UPDATE crop_cycles SET status = 'Sample Collected' WHERE crop_cycle_id = ${cycleId}`;
+            return { success: true, message: "Cycle moved to sample collected." }; // Added message here
+        } catch (error) {
+            console.error("Force Status Error:", error);
+            return { success: false, message: "Failed to update cycle status." };
+        }
     }
     return { success: false, message: "Unknown Action" };
 }

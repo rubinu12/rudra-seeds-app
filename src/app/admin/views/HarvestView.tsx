@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation'; 
+import { useRouter , useSearchParams } from 'next/navigation'; 
 import { useAdmin } from '@/src/components/admin/AdminProvider';
 
 // ACTIONS
@@ -40,6 +40,7 @@ const initialFinanceData: FinanceData = {
 
 export default function HarvestView() {
   const router = useRouter(); 
+  const searchParams = useSearchParams();
   const { year } = useAdmin();
   
   // --- Dashboard Stats State ---
@@ -68,7 +69,8 @@ export default function HarvestView() {
   const [isTempRefreshing, setIsTempRefreshing] = useState(false);
   const [isVerifyRefreshing, setIsVerifyRefreshing] = useState(false);
   const [isPaymentLoading, setIsPaymentLoading] = useState(false); 
-  const [isFinanceLoading, setIsFinanceLoading] = useState(false); // New Loading State
+  const [isFinanceLoading, setIsFinanceLoading] = useState(false); 
+  const [autoTargetId, setAutoTargetId] = useState<number | null>(null); 
 
   const CACHE_KEY = `harvest_stats_${year}`;
 
@@ -154,6 +156,23 @@ export default function HarvestView() {
     handleFetchFinance(); // Fetch fresh data when opening
   };
 
+  useEffect(() => {
+    const targetModal = searchParams.get('modal');
+    const targetId = searchParams.get('cycleId');
+
+    if (targetModal && targetId) {
+        setAutoTargetId(Number(targetId));
+        
+        if (targetModal === 'sample') handleOpenSampleModal();
+        if (targetModal === 'temp-price') handleOpenTempPriceModal();
+        if (targetModal === 'verify-price') handleOpenVerifyModal();
+        
+        // Clean up the URL so it doesn't re-trigger if the page is refreshed manually
+        router.replace('/admin/dashboard', { scroll: false });
+    }
+  }, [searchParams, router]);
+  // ------------------------------------------------
+
   // --- Init ---
   useEffect(() => {
     const cached = sessionStorage.getItem(CACHE_KEY);
@@ -229,10 +248,11 @@ export default function HarvestView() {
       
       <SampleEntryModal 
         isOpen={isSampleModalOpen} 
-        onClose={() => setSampleModalOpen(false)} 
+        onClose={() => { setSampleModalOpen(false); setAutoTargetId(null); }} 
         cycles={sampleCycles} 
         onRefresh={handleFetchSampleCycles} 
         isRefreshing={isSampleRefreshing} 
+        autoSelectCycleId={autoTargetId} // <-- Pass it here
       />
 
       <SetTemporaryPriceModal 

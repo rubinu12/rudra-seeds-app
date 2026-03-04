@@ -2,7 +2,7 @@
 
 import { sql } from "@vercel/postgres";
 import { revalidatePath } from "next/cache";
-import { auth } from "@/auth";
+import { auth } from "@/src/auth";
 
 // --- TYPES ---
 export type WeighingItem = {
@@ -14,9 +14,9 @@ export type WeighingItem = {
   seed_variety: string;
   color_code?: string;
   status: string;
-  lot_no: string; 
+  lot_no: string;
   collection_loc: string; // goods_collection_method
-  is_assigned: boolean;   // Dynamic based on logged-in user
+  is_assigned: boolean; // Dynamic based on logged-in user
   seed_bags_purchased: number;
   seed_bags_returned: number;
 };
@@ -28,8 +28,8 @@ export type CycleLotOption = {
 };
 
 export type LotWeightInput = {
-    lot_id: number;
-    weight: number;
+  lot_id: number;
+  weight: number;
 };
 
 // --- 1. GET PENDING WEIGHING (Filtered by Status = 'Priced') ---
@@ -81,20 +81,20 @@ export async function getPendingWeighing(): Promise<WeighingItem[]> {
         ORDER BY cc.crop_cycle_id DESC
     `;
 
-    return res.rows.map(row => ({
-        crop_cycle_id: row.crop_cycle_id,
-        farmer_name: row.farmer_name,
-        mobile_number: row.mobile_number,
-        village_name: row.village_name,
-        landmark_name: row.landmark_name || "",
-        seed_variety: row.seed_variety,
-        color_code: row.color_code,
-        status: row.status,
-        lot_no: row.lot_no || "No Lot",
-        collection_loc: row.collection_loc,
-        is_assigned: row.is_assigned, 
-        seed_bags_purchased: Number(row.seed_bags_purchased),
-        seed_bags_returned: Number(row.seed_bags_returned)
+    return res.rows.map((row) => ({
+      crop_cycle_id: row.crop_cycle_id,
+      farmer_name: row.farmer_name,
+      mobile_number: row.mobile_number,
+      village_name: row.village_name,
+      landmark_name: row.landmark_name || "",
+      seed_variety: row.seed_variety,
+      color_code: row.color_code,
+      status: row.status,
+      lot_no: row.lot_no || "No Lot",
+      collection_loc: row.collection_loc,
+      is_assigned: row.is_assigned,
+      seed_bags_purchased: Number(row.seed_bags_purchased),
+      seed_bags_returned: Number(row.seed_bags_returned),
     }));
   } catch (e) {
     console.error("Get Weighing List Error:", e);
@@ -104,28 +104,28 @@ export async function getPendingWeighing(): Promise<WeighingItem[]> {
 
 // --- 2. GET LOT OPTIONS ---
 export async function getCycleLots(cycleId: number): Promise<CycleLotOption[]> {
-    try {
-        const res = await sql`
+  try {
+    const res = await sql`
             SELECT lot_id, lot_number, bags_weighed as current_weight 
             FROM cycle_lots 
             WHERE crop_cycle_id = ${cycleId}
             ORDER BY lot_id ASC
         `;
-        return res.rows.map(r => ({
-            lot_id: r.lot_id,
-            lot_number: r.lot_number,
-            current_weight: Number(r.current_weight || 0)
-        }));
-    } catch (e) {
-        return [];
-    }
+    return res.rows.map((r) => ({
+      lot_id: r.lot_id,
+      lot_number: r.lot_number,
+      current_weight: Number(r.current_weight || 0),
+    }));
+  } catch (e) {
+    return [];
+  }
 }
 
 // --- 3. SUBMIT WEIGHING ---
 export async function submitWeighing(
-    cycleId: number, 
-    lots: LotWeightInput[],
-    remarks: string
+  cycleId: number,
+  lots: LotWeightInput[],
+  remarks: string,
 ) {
   const session = await auth();
   const userId = session?.user?.id ? Number(session.user.id) : null;
@@ -136,7 +136,7 @@ export async function submitWeighing(
 
     // 1. Update Each Lot
     for (const lot of lots) {
-        await sql`
+      await sql`
             UPDATE cycle_lots 
             SET bags_weighed = ${lot.weight} 
             WHERE lot_id = ${lot.lot_id} AND crop_cycle_id = ${cycleId}

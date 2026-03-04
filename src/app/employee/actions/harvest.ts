@@ -2,11 +2,11 @@
 
 import { sql } from "@vercel/postgres";
 import { revalidatePath } from "next/cache";
-import { auth } from "@/auth";
+import { auth } from "@/src/auth";
 
 export async function markAsHarvested(
   cycleId: number,
-  collectionLocation: string
+  collectionLocation: string,
 ) {
   try {
     // 1. Security Check

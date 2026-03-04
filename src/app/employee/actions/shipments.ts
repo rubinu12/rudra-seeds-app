@@ -2,7 +2,7 @@
 
 import { sql } from "@vercel/postgres";
 import { revalidatePath } from "next/cache";
-import { auth } from "@/auth";
+import { auth } from "@/src/auth";
 
 // ==============================================================================
 // 1. TYPE DEFINITIONS
@@ -17,7 +17,7 @@ export type ActiveShipment = {
   allowed_seed_ids: number[];
   seed_varieties: string[];
   location: string;
-  village_name?: string; 
+  village_name?: string;
   company_name: string;
 };
 
@@ -25,18 +25,18 @@ export type FarmerStock = {
   crop_cycle_id: number;
   farmer_name: string;
   village_name: string;
-  
+
   // [FIX] Calculated field to handle cases where 'bags_remaining' wasn't init
-  bags_remaining: number; 
-  
+  bags_remaining: number;
+
   seed_id: number;
   seed_variety: string;
   color_code: string;
-  
+
   // [FIX] Fields for UI Filters
   collection_loc: string;
   is_assigned: boolean;
-  lot_no: string; 
+  lot_no: string;
 };
 
 // ==============================================================================
@@ -45,31 +45,41 @@ export type FarmerStock = {
 
 export async function getAllVillages() {
   try {
-    const res = await sql`SELECT village_name FROM villages WHERE is_active = TRUE ORDER BY village_name ASC`;
+    const res =
+      await sql`SELECT village_name FROM villages WHERE is_active = TRUE ORDER BY village_name ASC`;
     return res.rows.map((r) => r.village_name);
-  } catch (_e) { return []; }
+  } catch (_e) {
+    return [];
+  }
 }
 
 export async function getShipmentMasterData() {
   try {
-    const [seeds, transportCos, destCos, landmarks, villages] = await Promise.all([
-      sql`SELECT seed_id, variety_name FROM seeds WHERE is_active = TRUE ORDER BY variety_name`,
-      sql`SELECT company_id as id, company_name as name FROM shipment_companies WHERE is_active = TRUE ORDER BY company_name`,
-      sql`SELECT dest_company_id as id, company_name as name FROM destination_companies WHERE is_active = TRUE ORDER BY company_name`,
-      sql`SELECT landmark_id as id, landmark_name as name FROM landmarks WHERE is_active = TRUE ORDER BY landmark_name`,
-      sql`SELECT village_id as id, village_name as name FROM villages WHERE is_active = TRUE ORDER BY village_name`
-    ]);
+    const [seeds, transportCos, destCos, landmarks, villages] =
+      await Promise.all([
+        sql`SELECT seed_id, variety_name FROM seeds WHERE is_active = TRUE ORDER BY variety_name`,
+        sql`SELECT company_id as id, company_name as name FROM shipment_companies WHERE is_active = TRUE ORDER BY company_name`,
+        sql`SELECT dest_company_id as id, company_name as name FROM destination_companies WHERE is_active = TRUE ORDER BY company_name`,
+        sql`SELECT landmark_id as id, landmark_name as name FROM landmarks WHERE is_active = TRUE ORDER BY landmark_name`,
+        sql`SELECT village_id as id, village_name as name FROM villages WHERE is_active = TRUE ORDER BY village_name`,
+      ]);
 
     return {
       seeds: seeds.rows,
       transportCos: transportCos.rows,
       destCos: destCos.rows,
       landmarks: landmarks.rows,
-      villages: villages.rows
+      villages: villages.rows,
     };
   } catch (error) {
     console.error("Master Data Fetch Error:", error);
-    return { seeds: [], transportCos: [], destCos: [], landmarks: [], villages: [] };
+    return {
+      seeds: [],
+      transportCos: [],
+      destCos: [],
+      landmarks: [],
+      villages: [],
+    };
   }
 }
 
@@ -81,15 +91,20 @@ export async function createShipment(formData: FormData) {
   const session = await auth();
   const userId = session?.user?.id ? Number(session.user.id) : null;
 
-  if (!userId) return { success: false, message: "Unauthorized: Employee ID missing" };
+  if (!userId)
+    return { success: false, message: "Unauthorized: Employee ID missing" };
 
   const capacityTonnes = Number(formData.get("capacity"));
   const vehicleNo = formData.get("vehicleNo");
   const transportId = formData.get("transportId");
   const destId = formData.get("destId");
   const location = formData.get("location") as string;
-  const landmarkId = formData.get("landmarkId") ? Number(formData.get("landmarkId")) : null;
-  const villageId = formData.get("villageId") ? Number(formData.get("villageId")) : null;
+  const landmarkId = formData.get("landmarkId")
+    ? Number(formData.get("landmarkId"))
+    : null;
+  const villageId = formData.get("villageId")
+    ? Number(formData.get("villageId"))
+    : null;
   const driverName = formData.get("driverName");
   const driverMobile = formData.get("driverMobile");
 
@@ -101,9 +116,12 @@ export async function createShipment(formData: FormData) {
     } else {
       seedIds = formData.getAll("seedIds").map((id) => Number(id));
     }
-  } catch (_e) { return { success: false, message: "Invalid seed selection" }; }
+  } catch (_e) {
+    return { success: false, message: "Invalid seed selection" };
+  }
 
-  if (seedIds.length === 0) return { success: false, message: "Select at least one seed variety" };
+  if (seedIds.length === 0)
+    return { success: false, message: "Select at least one seed variety" };
 
   const seedArrayLiteral = `{${seedIds.join(",")}}`;
   const targetBags = Math.ceil(capacityTonnes * 20);
@@ -161,7 +179,9 @@ export async function getActiveShipments(): Promise<ActiveShipment[]> {
   }
 }
 
-export async function getShipmentById(id: number): Promise<ActiveShipment | null> {
+export async function getShipmentById(
+  id: number,
+): Promise<ActiveShipment | null> {
   try {
     const res = await sql`
             SELECT 
@@ -176,7 +196,9 @@ export async function getShipmentById(id: number): Promise<ActiveShipment | null
             WHERE s.shipment_id = ${id}
         `;
     return res.rows[0] as ActiveShipment;
-  } catch (_e) { return null; }
+  } catch (_e) {
+    return null;
+  }
 }
 
 // ==============================================================================
@@ -230,16 +252,22 @@ export async function getFarmersForLoading(): Promise<FarmerStock[]> {
             WHERE cc.status IN ('Weighed', 'Loading', 'Partially Loaded')
             ORDER BY cc.crop_cycle_id DESC
         `;
-        
+
     // Filter out rows where calculated bags_remaining is 0 (Completed)
-    return (res.rows as FarmerStock[]).filter(r => Number(r.bags_remaining) > 0);
+    return (res.rows as FarmerStock[]).filter(
+      (r) => Number(r.bags_remaining) > 0,
+    );
   } catch (e) {
     console.error("Fetch Farmers Error", e);
     return [];
   }
 }
 
-export async function addBagsToShipment(shipmentId: number, cycleId: number, bagsToAdd: number) {
+export async function addBagsToShipment(
+  shipmentId: number,
+  cycleId: number,
+  bagsToAdd: number,
+) {
   const session = await auth();
   const userId = session?.user?.id ? Number(session.user.id) : null;
   if (!userId) return { success: false, message: "Unauthorized" };
@@ -247,25 +275,35 @@ export async function addBagsToShipment(shipmentId: number, cycleId: number, bag
   try {
     const [shipmentRes, check] = await Promise.all([
       sql`SELECT total_bags, target_bag_capacity FROM shipments WHERE shipment_id = ${shipmentId}`,
-      sql`SELECT bags_remaining_to_load, quantity_in_bags FROM crop_cycles WHERE crop_cycle_id = ${cycleId}`
+      sql`SELECT bags_remaining_to_load, quantity_in_bags FROM crop_cycles WHERE crop_cycle_id = ${cycleId}`,
     ]);
 
-    if (shipmentRes.rowCount === 0) return { success: false, message: "Shipment not found" };
-    
+    if (shipmentRes.rowCount === 0)
+      return { success: false, message: "Shipment not found" };
+
     // --- Capacity Validation ---
     const { total_bags, target_bag_capacity } = shipmentRes.rows[0];
-    const MARGIN = 50; 
-    if ((total_bags + bagsToAdd) > (target_bag_capacity + MARGIN)) {
-      return { success: false, message: `Capacity Exceeded! Max allowed is ${target_bag_capacity + MARGIN}.` };
+    const MARGIN = 50;
+    if (total_bags + bagsToAdd > target_bag_capacity + MARGIN) {
+      return {
+        success: false,
+        message: `Capacity Exceeded! Max allowed is ${target_bag_capacity + MARGIN}.`,
+      };
     }
 
     // --- Stock Validation ---
     const cycleRow = check.rows[0];
     // Use same fallback logic as fetcher
-    const currentStock = cycleRow.bags_remaining_to_load > 0 ? cycleRow.bags_remaining_to_load : cycleRow.quantity_in_bags;
+    const currentStock =
+      cycleRow.bags_remaining_to_load > 0
+        ? cycleRow.bags_remaining_to_load
+        : cycleRow.quantity_in_bags;
 
     if (bagsToAdd > currentStock) {
-      return { success: false, message: `Not enough bags. Available: ${currentStock}` };
+      return {
+        success: false,
+        message: `Not enough bags. Available: ${currentStock}`,
+      };
     }
 
     await sql`BEGIN`;
@@ -293,7 +331,11 @@ export async function addBagsToShipment(shipmentId: number, cycleId: number, bag
 }
 
 // ... [Keep undoLastLoad, removeShipmentItem, markShipmentAsFilled, getShipmentManifest as previously defined] ...
-export async function undoLastLoad(shipmentId: number, cycleId: number, bagsToRevert: number) {
+export async function undoLastLoad(
+  shipmentId: number,
+  cycleId: number,
+  bagsToRevert: number,
+) {
   try {
     await sql`BEGIN`;
     await sql`DELETE FROM shipment_items WHERE item_id = (SELECT item_id FROM shipment_items WHERE shipment_id = ${shipmentId} AND crop_cycle_id = ${cycleId} AND bags_loaded = ${bagsToRevert} ORDER BY added_at DESC LIMIT 1)`;
@@ -304,10 +346,18 @@ export async function undoLastLoad(shipmentId: number, cycleId: number, bagsToRe
     await sql`COMMIT`;
     revalidatePath(`/employee/shipment/${shipmentId}`);
     return { success: true };
-  } catch (_e) { await sql`ROLLBACK`; return { success: false, message: "Undo failed" }; }
+  } catch (_e) {
+    await sql`ROLLBACK`;
+    return { success: false, message: "Undo failed" };
+  }
 }
 
-export async function removeShipmentItem(itemId: number, shipmentId: number, cycleId: number, bags: number) {
+export async function removeShipmentItem(
+  itemId: number,
+  shipmentId: number,
+  cycleId: number,
+  bags: number,
+) {
   try {
     await sql`BEGIN`;
     await sql`DELETE FROM shipment_items WHERE item_id = ${itemId}`;
@@ -316,7 +366,10 @@ export async function removeShipmentItem(itemId: number, shipmentId: number, cyc
     await sql`COMMIT`;
     revalidatePath(`/employee/shipment/${shipmentId}`);
     return { success: true };
-  } catch (_e) { await sql`ROLLBACK`; return { success: false, message: "Failed to remove item" }; }
+  } catch (_e) {
+    await sql`ROLLBACK`;
+    return { success: false, message: "Failed to remove item" };
+  }
 }
 
 export async function markShipmentAsFilled(shipmentId: number) {
@@ -325,17 +378,25 @@ export async function markShipmentAsFilled(shipmentId: number) {
   if (!userId) return { success: false, message: "Unauthorized" };
 
   try {
-    const s = await sql`SELECT total_bags, target_bag_capacity FROM shipments WHERE shipment_id = ${shipmentId}`;
+    const s =
+      await sql`SELECT total_bags, target_bag_capacity FROM shipments WHERE shipment_id = ${shipmentId}`;
     const { total_bags, target_bag_capacity } = s.rows[0];
     const diff = total_bags - target_bag_capacity;
 
-    if (diff < -50) return { success: false, message: `Underfilled by ${Math.abs(diff)} bags.` };
-    if (diff > 50) return { success: false, message: `Overfilled by ${diff} bags.` };
+    if (diff < -50)
+      return {
+        success: false,
+        message: `Underfilled by ${Math.abs(diff)} bags.`,
+      };
+    if (diff > 50)
+      return { success: false, message: `Overfilled by ${diff} bags.` };
 
     await sql`UPDATE shipments SET status = 'Filled', confirmation_date = NOW(), dispatch_by = ${userId} WHERE shipment_id = ${shipmentId}`;
     revalidatePath("/employee/dashboard");
     return { success: true };
-  } catch (e) { return { success: false, message: "Failed to confirm." }; }
+  } catch (e) {
+    return { success: false, message: "Failed to confirm." };
+  }
 }
 
 export async function getShipmentManifest(shipmentId: number) {
@@ -355,5 +416,7 @@ export async function getShipmentManifest(shipmentId: number) {
       ORDER BY si.added_at DESC
     `;
     return res.rows;
-  } catch (_e) { return []; }
+  } catch (_e) {
+    return [];
+  }
 }

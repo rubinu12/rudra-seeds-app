@@ -42,14 +42,14 @@ export default function GlobalSearch() {
   }, [wrapperRef]);
 
   const handleAction = async (item: SearchResult) => {
-    // 1. REPRINT: Direct Navigation to Print Page
+    // 1. REPRINT: Direct Navigation
     if (item.actionType === 'REPRINT') {
         router.push(`/admin/payments/${item.id}/print-cheque`);
         setIsOpen(false);
         return;
     }
 
-    // 2. API ACTION: Execute immediately (e.g. Mark Harvested)
+    // 2. API ACTION: Execute immediately
     if (item.actionType === 'API') {
         const res = await performGlobalAction(item.id, item.actionLabel!);
         if(res.success) {
@@ -62,17 +62,30 @@ export default function GlobalSearch() {
         return;
     }
 
-    // 3. MODAL ACTION: Navigate to the correct view where the modal lives
+    // 3. MODAL ACTION: Navigate with URL Parameters to trigger modals
     if (item.actionType === 'MODAL') {
         if (item.actionLabel === 'Process Payment') {
             router.push(`/admin/payments/${item.id}/process`);
         } else if (item.actionLabel?.includes('Shipments')) {
             router.push(`/admin/shipments`);
+        } else if (item.actionLabel === 'Enter Sample Data') {
+            // If it's only harvested, force the status update FIRST
+            if (item.status.toLowerCase() === 'harvested') {
+                const res = await performGlobalAction(item.id, 'Force Sample Collected');
+                if (!res.success) {
+                    toast.error("Failed to prepare cycle for sampling.");
+                    return; // Stop here if the database fails
+                }
+            }
+            // Now safely open the modal (the cycle is now officially 'Sample Collected')
+            router.push(`/admin/dashboard?modal=sample&cycleId=${item.id}`);
+        // 👆 👆 👆 👆
+        } else if (item.actionLabel === 'Set Temporary Price') {
+            router.push(`/admin/dashboard?modal=temp-price&cycleId=${item.id}`);
+        } else if (item.actionLabel === 'Verify Price') {
+            router.push(`/admin/dashboard?modal=verify-price&cycleId=${item.id}`);
         } else {
-            // For Sampling/Pricing, go to Dashboard. 
-            // The item will appear in the relevant list because status matches.
             router.push(`/admin/dashboard`);
-            toast.info(`Opening Dashboard for: ${item.title}`);
         }
         setIsOpen(false);
     }

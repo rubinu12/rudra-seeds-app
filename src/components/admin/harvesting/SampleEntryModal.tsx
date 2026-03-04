@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState , useEffect } from "react";
 import Modal from "@/src/components/ui/Modal";
 import {
   ChevronRight, FlaskConical, RefreshCw, LoaderCircle, ArrowLeft, Save,
@@ -19,13 +19,23 @@ type Props = {
   cycles: CycleForSampleEntry[];
   onRefresh: () => Promise<void>;
   isRefreshing: boolean;
+  autoSelectCycleId?: number | null;
 };
 
 export default function SampleEntryModal({
-  isOpen, onClose, cycles, onRefresh, isRefreshing,
+  isOpen, onClose, cycles, onRefresh, isRefreshing, autoSelectCycleId
 }: Props) {
   const [selectedCycle, setSelectedCycle] = useState<CycleForSampleEntry | null>(null);
 
+  useEffect(() => {
+    if (autoSelectCycleId && cycles.length > 0) {
+      const targetCycle = cycles.find(c => c.crop_cycle_id === autoSelectCycleId);
+      if (targetCycle) {
+        setSelectedCycle(targetCycle);
+      }
+    }
+  }, [autoSelectCycleId, cycles]);
+  // -------------------------
   const ModalHeader = (
     <div className="flex items-center justify-between w-full">
       <div className="flex items-center gap-3">

@@ -269,7 +269,7 @@ export default function PrintBillClient({ billData }: PrintBillClientProps) {
           padding: 10mm 5mm;
           font-family: Arial, sans-serif;
           color: black;
-          position: relative; /* Essential for absolute positioning of Bill No */
+          position: relative; 
         }
         .bill-header p {
           margin-bottom: 2px;
@@ -300,62 +300,52 @@ export default function PrintBillClient({ billData }: PrintBillClientProps) {
         }
 
         @media print {
-          /* --- THE FIX: VISIBILITY INSTEAD OF DISPLAY --- */
-          /* Hide everything in the body first */
+          /* --- THE FIX: KILL INVISIBLE OVERFLOW & SCROLL BARS --- */
+          html, body {
+            height: 100vh !important;
+            overflow: hidden !important; 
+            margin: 0;
+            padding: 0;
+            background: white !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+
           body * {
             visibility: hidden;
           }
 
-          /* Unhide ONLY the bill container and its children */
           .bill-container,
           .bill-container * {
             visibility: visible;
           }
 
-          /* --- PAGE SETUP --- */
-          body {
-            margin: 0;
-            padding: 0;
-            background: white !important;
-            font-size: 10pt;
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-            overflow: hidden; /* Prevents scrollbars from printing */
-          }
-
-          /* Ensure the wrapper doesn't mess up layout */
-          html, body {
-            height: auto;
-          }
-
-          /* Hide controls explicitly */
           .controls {
             display: none !important;
           }
 
-          /* --- BILL POSITIONING --- */
           .bill-container {
             position: absolute;
             left: 0;
             top: 0;
-            width: 100%; /* Ensure full width */
+            width: 100%; 
             margin: 0 !important;
             padding: 0 !important;
             border: none !important;
-            background: white;
+            background: transparent;
           }
 
-          /* --- YOUR CUSTOM STYLES (PRESERVED) --- */
+          /* --- THE FIX: STRICT HEIGHT & BORDER-BOX SIZING --- */
           .bill-a4 {
-            /* We don't need absolute here if container is absolute, 
-               but keeping margins/padding logic is safe */
             width: 210mm;
-            min-height: 297mm; /* Changed to min-height for safety */
+            height: 296mm; /* Exactly 1mm less than A4 to prevent rounding spills */
+            box-sizing: border-box !important; /* Forces padding to stay inside the 296mm */
             margin: 0 !important;
             padding: 10mm !important; 
             border: none !important;
             box-shadow: none !important;
             font-size: 10pt;
+            overflow: hidden; /* Prevents text from pushing boundaries */
           }
 
           .bill-table th,
@@ -374,7 +364,7 @@ export default function PrintBillClient({ billData }: PrintBillClientProps) {
         }
 
         @page {
-          size: A4;
+          size: A4 portrait;
           margin: 0;
         }
       `}</style>

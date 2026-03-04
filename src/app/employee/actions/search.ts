@@ -1,25 +1,25 @@
 "use server";
 
-import { sql } from '@vercel/postgres';
-import { auth } from "@/auth";
+import { sql } from "@vercel/postgres";
+import { auth } from "@/src/auth";
 
 export async function searchGlobalCycles(query: string) {
-    const session = await auth();
-    const userId = session?.user?.id ? Number(session.user.id) : null;
+  const session = await auth();
+  const userId = session?.user?.id ? Number(session.user.id) : null;
 
-    if (!userId) {
-        console.error("⛔ Search Unauthorized");
-        return [];
-    }
+  if (!userId) {
+    console.error("⛔ Search Unauthorized");
+    return [];
+  }
 
-    if (!query || query.length < 2) return [];
+  if (!query || query.length < 2) return [];
 
-    console.log(`🔎 Searching Database: "${query}" for User: ${userId}`);
+  console.log(`🔎 Searching Database: "${query}" for User: ${userId}`);
 
-    try {
-        const searchTerm = `%${query}%`;
+  try {
+    const searchTerm = `%${query}%`;
 
-        const result = await sql`
+    const result = await sql`
             SELECT 
                 cc.crop_cycle_id,
                 f.name as farmer_name,
@@ -52,12 +52,11 @@ export async function searchGlobalCycles(query: string) {
             ORDER BY cc.crop_cycle_id DESC
             LIMIT 20
         `;
-        
-        return result.rows;
 
-    } catch (error: unknown) {
-        const msg = error instanceof Error ? error.message : "Unknown error";
-        console.error("❌ Search Error:", msg);
-        return [];
-    }
+    return result.rows;
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : "Unknown error";
+    console.error("❌ Search Error:", msg);
+    return [];
+  }
 }

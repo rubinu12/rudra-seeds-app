@@ -1,28 +1,13 @@
 // src/auth.ts
-import NextAuth, { DefaultSession } from 'next-auth';
+import NextAuth from 'next-auth';
 import { authConfig } from './auth.config';
 import Credentials from 'next-auth/providers/credentials';
 import { z } from 'zod';
 import { sql } from '@vercel/postgres';
 import { compare } from 'bcryptjs';
+import { AuthError } from 'next-auth';
 
 // --- Types ---
-declare module 'next-auth' {
-    interface Session {
-        user: {
-            id: string;
-            role: 'admin' | 'employee';
-        } & DefaultSession['user'];
-    }
-    interface User {
-        role?: 'admin' | 'employee';
-    }
-    interface JWT {
-        id?: string;
-        role?: 'admin' | 'employee';
-    }
-}
-
 type User = {
     user_id: number;
     name: string;
@@ -54,7 +39,7 @@ export const {
     signIn,
     signOut,
 } = NextAuth({
-    ...authConfig, // Inherit pages and basic config
+    ...authConfig, // Inherit pages and basic config from auth.config.ts
     providers: [
         Credentials({
             async authorize(credentials) {
@@ -86,20 +71,34 @@ export const {
     session: {
         strategy: 'jwt',
     },
-    callbacks: {
-        async jwt({ token, user }) {
-            if (user) {
-                token.id = user.id;
-                token.role = user.role;
-            }
-            return token;
-        },
-        async session({ session, token }) {
-            if (token && session.user) {
-                session.user.id = token.id as string;
-                session.user.role = token.role as 'admin' | 'employee';
-            }
-            return session;
-        },
-    },
 });
+
+export async function authenticate(prevState: string | undefined, formData: FormData) {
+    try {
+        await signIn('credentials', {
+            ...Object.fromEntries(formData),
+            redirectTo: '/', 
+        });
+    } catch (error: any) {
+        // 1. MUST re-throw Next.js redirects so the page actually changes on success
+        if (
+            error?.name === 'NEXT_REDIRECT' || 
+            error?.message === 'NEXT_REDIRECT' || 
+            (typeof error?.digest === 'string' && error.digest.startsWith('NEXT_REDIRECT'))
+        ) {
+            throw error;
+        }
+
+        // 2. Handle Auth.js specific credentials errors safely
+        if (error instanceof AuthError || error?.type === 'CredentialsSignin') {
+            return 'Invalid email or password.';
+        }
+
+        // 3. THE FIX: Catch all other server/DB crashes and return as a string
+        // This stops Next.js from panicking and throwing "An unexpected response"
+        console.error("🔥 Server Action Crash Details:", error);
+        
+        // Return the actual error message so you can see it in the UI
+        return error?.message || 'An internal server error occurred. Check terminal logs.';
+    }
+}

@@ -3,7 +3,7 @@
 
 import { sql } from "@vercel/postgres";
 import { revalidatePath } from "next/cache";
-import { auth } from "@/auth";
+import { auth } from "@/src/auth";
 
 export type ShipmentData = {
   shipment_id: number;
@@ -12,11 +12,11 @@ export type ShipmentData = {
   capacity_in_tonnes: number;
   location: string;
   company_name: string;
-  company_address: string; 
+  company_address: string;
   transport_name: string;
   driver_name: string;
   driver_mobile: string;
-  loaded_varieties: string[]; 
+  loaded_varieties: string[];
   farmer_names: string[];
   creation_date: Date;
   dispatch_date?: Date;
@@ -29,7 +29,7 @@ export type BillItem = {
   village_name: string;
   lot_no: string;
   bags: number;
-  weight: number; 
+  weight: number;
 };
 
 // --- 1. GET PENDING (FILLED) SHIPMENTS ---
@@ -227,7 +227,7 @@ export async function finalizeAndPrintBill(
   city: string,
   invoiceNumber: string,
   dispatchFrom: string,
-  shipToAddress: string
+  shipToAddress: string,
 ) {
   const session = await auth();
   if (session?.user?.role !== "admin")
@@ -276,7 +276,7 @@ export async function finalizeAndPrintBill(
     `;
 
     await sql`COMMIT`;
-    revalidatePath("/admin/shipments"); 
+    revalidatePath("/admin/shipments");
     return { success: true, message: "Bill Saved & Ledger Updated" };
   } catch (e) {
     await sql`ROLLBACK`;
