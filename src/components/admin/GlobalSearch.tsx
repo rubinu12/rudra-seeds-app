@@ -41,10 +41,18 @@ export default function GlobalSearch() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [wrapperRef]);
 
-  const handleAction = async (item: SearchResult) => {
-    // 1. REPRINT: Direct Navigation
+  // src/components/admin/GlobalSearch.tsx
+
+const handleAction = async (item: SearchResult) => {
+    // [UPDATED] 1. REPRINT: Handle both Cheque and Farmer Bill reprinting
     if (item.actionType === 'REPRINT') {
-        router.push(`/admin/payments/${item.id}/print-cheque`);
+        if (item.actionLabel === 'Reprint Farmer Bill') {
+            // Navigates to the Consent Letter / Farmer Payment Bill page
+            router.push(`/admin/payments/${item.id}/print-bill`);
+        } else {
+            // Navigates to the Cheque printing page
+            router.push(`/admin/payments/${item.id}/print-cheque`);
+        }
         setIsOpen(false);
         return;
     }
@@ -62,26 +70,19 @@ export default function GlobalSearch() {
         return;
     }
 
-    // 3. MODAL ACTION: Navigate with URL Parameters to trigger modals
+    // 3. MODAL ACTION: Navigate with URL Parameters
     if (item.actionType === 'MODAL') {
         if (item.actionLabel === 'Process Payment') {
             router.push(`/admin/payments/${item.id}/process`);
-        } else if (item.actionLabel?.includes('Shipments')) {
-            router.push(`/admin/shipments`);
         } else if (item.actionLabel === 'Enter Sample Data') {
-            // If it's only harvested, force the status update FIRST
             if (item.status.toLowerCase() === 'harvested') {
                 const res = await performGlobalAction(item.id, 'Force Sample Collected');
                 if (!res.success) {
                     toast.error("Failed to prepare cycle for sampling.");
-                    return; // Stop here if the database fails
+                    return; 
                 }
             }
-            // Now safely open the modal (the cycle is now officially 'Sample Collected')
             router.push(`/admin/dashboard?modal=sample&cycleId=${item.id}`);
-        // 👆 👆 👆 👆
-        } else if (item.actionLabel === 'Set Temporary Price') {
-            router.push(`/admin/dashboard?modal=temp-price&cycleId=${item.id}`);
         } else if (item.actionLabel === 'Verify Price') {
             router.push(`/admin/dashboard?modal=verify-price&cycleId=${item.id}`);
         } else {
@@ -89,7 +90,7 @@ export default function GlobalSearch() {
         }
         setIsOpen(false);
     }
-  };
+};
 
   return (
     <div ref={wrapperRef} className="relative w-full max-w-lg hidden md:block">

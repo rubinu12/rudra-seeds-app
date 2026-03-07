@@ -81,6 +81,7 @@ export async function searchGlobal(query: string): Promise<SearchResult[]> {
 }
 
 // ... [Keep mapStatusToAction and performGlobalAction exactly as they are] ...
+
 function mapStatusToAction(row: GlobalSearchRow): SearchResult {
   const base = {
     id: row.crop_cycle_id,
@@ -100,11 +101,14 @@ function mapStatusToAction(row: GlobalSearchRow): SearchResult {
   if (status === 'harvested' || status === 'sample collected') {
       return { ...base, actionLabel: 'Enter Sample Data', actionType: 'MODAL' };
   }
-  if (status === 'sample collected') return { ...base, actionLabel: 'Enter Lab Data', actionType: 'MODAL' };
   if (status === 'sampled') return { ...base, actionLabel: 'Propose Price', actionType: 'MODAL' };
   if (status === 'price proposed') return { ...base, actionLabel: 'Verify Price', actionType: 'MODAL' };
   if (status === 'loaded') return { ...base, actionLabel: 'Process Payment', actionType: 'MODAL' };
-  if (status === 'paid' || status === 'cleared' || status === 'cheque generated') return { ...base, actionLabel: 'Reprint Cheques', actionType: 'REPRINT' };
+  
+  // [UPDATED] Change the label to "Reprint Farmer Bill" for payment-related statuses
+  if (status === 'paid' || status === 'cleared' || status === 'cheque generated') {
+      return { ...base, actionLabel: 'Reprint Farmer Bill', actionType: 'REPRINT' };
+  }
 
   return { ...base, actionLabel: row.status, actionType: 'NONE' };
 }
