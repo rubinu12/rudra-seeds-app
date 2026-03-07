@@ -1,7 +1,6 @@
-// src/app/admin/shipments/[id]/print/PrintDocumentClient.tsx
 "use client";
 
-import React, { useState, useTransition } from "react";
+import React, { useState, useTransition, useEffect, useMemo } from "react";
 import { Printer, Save, LoaderCircle } from "lucide-react";
 import { finalizeAndPrintBill } from "@/src/app/admin/actions/adminShipment";
 
@@ -23,6 +22,12 @@ function amountToWords(amount: number): string {
 export default function PrintDocumentClient({ shipment, items }: { shipment: any; items: any[] }) {
   const [isPending, startTransition] = useTransition();
 
+  const availableShipAddresses: string[] = useMemo(() => {
+    const addrsFromDb = Array.isArray(shipment.ship_to_addresses) ? shipment.ship_to_addresses : [];
+    const baseList = addrsFromDb.length > 0 ? addrsFromDb : [shipment.dest_address];
+    return ["-- Select Delivery Address --", ...baseList];
+  }, [shipment.ship_to_addresses, shipment.dest_address]);
+
   const [docType, setDocType] = useState<"INVOICE" | "DELIVERY CHALLAN" | "BOTH">("BOTH");
   const [packSize, setPackSize] = useState<number>(50);
   const [transportRate, setTransportRate] = useState<number>(0);
@@ -36,13 +41,7 @@ export default function PrintDocumentClient({ shipment, items }: { shipment: any
   const generatedInvoiceNo = `${companyFirstWord}-SW-${shipment.shipment_id}-${currentYear}`;
   const [invoiceNo, setInvoiceNo] = useState<string>(shipment.invoice_number || generatedInvoiceNo);
 
-  const availableShipAddresses: string[] = Array.isArray(shipment.ship_to_addresses) 
-    ? shipment.ship_to_addresses 
-    : [];
-    
-  const [selectedShipTo, setSelectedShipTo] = useState<string>(
-    shipment.saved_ship_to || availableShipAddresses[0] || "No delivery address selected"
-  );
+  const [selectedShipTo, setSelectedShipTo] = useState<string>(availableShipAddresses[0]);
 
   const [rates, setRates] = useState<number[]>(
     items.map(item => item.purchase_rate ? Number((item.purchase_rate / 20).toFixed(2)) : 0)
@@ -58,8 +57,11 @@ export default function PrintDocumentClient({ shipment, items }: { shipment: any
   const totalQty = totalBags * packSize;
   const totalAmount = items.reduce((sum, item, index) => sum + (Number(item.bags) * packSize * rates[index]), 0);
 
-  // SAVE TO DATABASE
   const handleSaveOnly = () => {
+    if (selectedShipTo === availableShipAddresses[0]) {
+        alert("Please select a valid delivery address before saving.");
+        return;
+    }
     startTransition(async () => {
         const result = await finalizeAndPrintBill(
             shipment.shipment_id, totalAmount, new Date().toISOString(),
@@ -73,25 +75,39 @@ export default function PrintDocumentClient({ shipment, items }: { shipment: any
     });
   };
 
-  // PRINT (Native Vector PDF generation)
   const handlePrint = () => {
-    // Trick the browser so the "Save as PDF" dialog suggests the correct file name
-    const originalTitle = document.title;
-    const suffix = docType === "BOTH" ? "INVOICE_AND_DC" : docType;
-    document.title = `${invoiceNo}_${suffix}`; 
+    if (selectedShipTo === availableShipAddresses[0]) {
+        alert("Please select a valid delivery address before printing.");
+        return;
+    }
     
+    const originalTitle = document.title;
+    
+    let pdfFileName = invoiceNo;
+    if (docType === "BOTH") {
+        pdfFileName = `${invoiceNo}_bill&dc`;
+    } else if (docType === "DELIVERY CHALLAN") {
+        pdfFileName = `${invoiceNo}_dc`;
+    }
+
+    document.title = pdfFileName; 
     window.print();
     
-    // Restore title
     setTimeout(() => { document.title = originalTitle; }, 1000);
   };
 
-  const sharedData = { shipment, items, packSize, transportRate, dispatchFrom, destinationCity, paymentTerms, deliveryTerms, invoiceNo, selectedShipTo, rates, handleRateChange, totalBags, totalQty, totalAmount };
+  const displayShipTo = selectedShipTo === availableShipAddresses[0] ? "" : selectedShipTo;
+
+  const sharedData = { 
+    shipment, items, packSize, transportRate, dispatchFrom, 
+    destinationCity, paymentTerms, deliveryTerms, invoiceNo, 
+    selectedShipTo: displayShipTo, rates, handleRateChange, 
+    totalBags, totalQty, totalAmount 
+  };
 
   return (
     <div className="min-h-screen bg-gray-200 py-10 print:bg-white print:py-0 font-sans text-black">
       
-      {/* GLOBAL PRINT CSS: Enforces exactly A4 sizing & forces page break between Invoice and DC */}
       <style dangerouslySetInnerHTML={{__html: `
         @media print {
           @page { size: A4 portrait; margin: 0; }
@@ -100,7 +116,7 @@ export default function PrintDocumentClient({ shipment, items }: { shipment: any
         }
       `}} />
 
-      {/* --- NON-PRINTABLE SETTINGS PANEL --- */}
+      {/* --- SETTINGS PANEL --- */}
       <div className="max-w-[210mm] mx-auto mb-6 bg-white p-5 rounded-xl shadow-lg grid grid-cols-1 md:grid-cols-3 gap-5 print:hidden border border-gray-300">
         <div className="md:col-span-3 pb-3 border-b flex justify-between items-center">
             <h2 className="font-bold text-xl text-gray-800 tracking-tight">Document Configuration</h2>
@@ -146,16 +162,17 @@ export default function PrintDocumentClient({ shipment, items }: { shipment: any
             <select 
                 value={selectedShipTo} 
                 onChange={(e) => setSelectedShipTo(e.target.value)} 
-                className="border border-gray-300 rounded-lg p-2 text-sm w-full outline-none bg-orange-50 font-medium focus:ring-2 focus:ring-orange-500"
+                className={`border rounded-lg p-2 text-sm w-full outline-none font-medium focus:ring-2 ${selectedShipTo === availableShipAddresses[0] ? 'border-red-300 bg-red-50 focus:ring-red-500' : 'border-gray-300 bg-orange-50 focus:ring-orange-500'}`}
             >
                 {availableShipAddresses.map((addr, idx) => (
                     <option key={idx} value={addr}>{addr.substring(0, 150)}...</option>
                 ))}
-                {availableShipAddresses.length === 0 && <option value="N/A">No addresses found</option>}
             </select>
+            {selectedShipTo === availableShipAddresses[0] && (
+                <p className="text-red-500 text-[10px] mt-1 font-bold italic uppercase tracking-tighter">* Please select an address from the list to update the bill.</p>
+            )}
         </div>
 
-        {/* SEPARATE SAVE AND PRINT BUTTONS */}
         <div className="md:col-span-3 border-t pt-4 flex justify-end gap-3 mt-1">
             <button 
                 onClick={handleSaveOnly} 
@@ -170,37 +187,35 @@ export default function PrintDocumentClient({ shipment, items }: { shipment: any
                 className="bg-indigo-600 text-white px-8 py-2.5 rounded-lg flex items-center justify-center gap-2 text-sm font-bold shadow-md hover:bg-indigo-700 transition-colors"
             >
                 <Printer className="w-5 h-5" /> 
-                {docType === "BOTH" ? "Print / Save Both as PDF" : "Print Document"}
+                {docType === "BOTH" ? "Print Both" : "Print"}
             </button>
         </div>
       </div>
 
-      {/* --- A4 PREVIEWS --- */}
+      {/* --- PREVIEWS --- */}
       <div className="flex flex-col gap-10 print:gap-0 items-center">
-         {(docType === "INVOICE" || docType === "BOTH") && (
+          {(docType === "INVOICE" || docType === "BOTH") && (
             <div className="w-[210mm] shadow-2xl print:shadow-none bg-white">
               <InvoiceTemplate {...sharedData} />
             </div>
-         )}
-         
-         {/* PAGE BREAK (Only visible during physical print or "Save as PDF") */}
-         {docType === "BOTH" && <div className="page-break hidden print:block"></div>}
-         
-         {(docType === "DELIVERY CHALLAN" || docType === "BOTH") && (
+          )}
+          
+          {docType === "BOTH" && <div className="page-break hidden print:block"></div>}
+          
+          {(docType === "DELIVERY CHALLAN" || docType === "BOTH") && (
             <div className="w-[210mm] shadow-2xl print:shadow-none bg-white">
               <DCTemplate {...sharedData} />
             </div>
-         )}
+          )}
       </div>
 
     </div>
   );
 }
 
-// ============================================================================
-// TEMPLATE 1: INVOICE A4 PAGE (OPTIMIZED FOR 8 ITEMS)
-// ============================================================================
 function InvoiceTemplate({ shipment, items, packSize, transportRate, dispatchFrom, destinationCity, paymentTerms, deliveryTerms, invoiceNo, selectedShipTo, rates, handleRateChange, totalBags, totalQty, totalAmount }: any) {
+  const displayAddress = selectedShipTo || "No delivery address selected";
+
   return (
     <div className="w-[210mm] h-[296mm] mx-auto bg-white p-[10mm] text-[13px] leading-[1.4] box-border relative flex flex-col overflow-hidden text-black">
         <div className="border-2 border-black w-full flex flex-col h-fit">
@@ -245,7 +260,6 @@ function InvoiceTemplate({ shipment, items, packSize, transportRate, dispatchFro
               </div>
             </div>
           </div>
-          {/* Reduced min-height from 40mm to 32mm */}
           <div className="flex border-b-2 border-black min-h-[32mm]">
             <div className="w-1/2 border-r-2 border-black p-2 flex flex-col">
               <p className="font-bold underline mb-1 text-[12px]">Buyer (Bill to)</p>
@@ -260,7 +274,9 @@ function InvoiceTemplate({ shipment, items, packSize, transportRate, dispatchFro
             <div className="w-1/2 flex flex-col">
               <div className="p-2 border-b-2 border-black flex-grow">
                 <p className="font-bold underline mb-1 text-[12px]">Consignee (Ship to)</p>
-                <p className="whitespace-pre-wrap font-semibold text-[13px] leading-tight">{selectedShipTo}</p>
+                <p className={`whitespace-pre-wrap font-semibold text-[13px] leading-tight ${!selectedShipTo ? 'text-red-500 font-bold italic underline decoration-red-500' : ''}`}>
+                    {displayAddress}
+                </p>
               </div>
               <div className="p-2">
                 <p className="font-bold text-[14px] uppercase">{shipment.transport_name}</p>
@@ -274,41 +290,41 @@ function InvoiceTemplate({ shipment, items, packSize, transportRate, dispatchFro
             </div>
           </div>
           
-          {/* TABLE SECTION: Reduced vertical padding (py-1) to fit 8 items safely */}
           <div className="flex flex-col flex-grow">
-            <table className="w-full border-collapse text-[13px]">
+            <table className="w-full border-collapse text-[12px] leading-tight">
               <thead>
-                <tr className="border-b-2 border-black bg-gray-100 print:bg-transparent">
-                  <th className="border-r border-black py-1.5 px-2 font-bold w-[5%] text-center">Sr.<br/>No.</th>
-                  <th className="border-r border-black py-1.5 px-2 font-bold w-[18%] text-left">Farmer Name</th>
-                  <th className="border-r border-black py-1.5 px-2 font-bold w-[18%] text-left">Item Name</th>
-                  <th className="border-r border-black py-1.5 px-2 font-bold w-[13%] text-center">Lot No.</th>
-                  <th className="border-r border-black py-1.5 px-2 font-bold w-[8%] text-center">Bags<br/><span className="font-normal text-[10px]">({packSize} Kg)</span></th>
-                  <th className="border-r border-black py-1.5 px-2 font-bold w-[10%] text-center">Qty (Kg)</th>
-                  <th className="border-r border-black py-1.5 px-2 font-bold w-[10%] text-center">Rate</th>
-                  <th className="py-1.5 px-2 font-bold w-[18%] text-right pr-2">Amount (₹)</th>
+                <tr className="border-b-2 border-black bg-gray-100 print:bg-transparent text-[12px]">
+                  {/* NEW COLUMN WIDTHS: 30% for Farmer Name, 13% for Item Name */}
+                  <th className="border-r border-black py-1 px-1.5 font-bold w-[4%] text-center">Sr.</th>
+                  <th className="border-r border-black py-1 px-1.5 font-bold w-[30%] text-left">Farmer Name</th>
+                  <th className="border-r border-black py-1 px-1.5 font-bold w-[13%] text-left">Item Name</th>
+                  <th className="border-r border-black py-1 px-1.5 font-bold w-[11%] text-center">Lot No.</th>
+                  <th className="border-r border-black py-1 px-1.5 font-bold w-[8%] text-center">Bags<br/><span className="font-normal text-[9px]">({packSize} Kg)</span></th>
+                  <th className="border-r border-black py-1 px-1.5 font-bold w-[10%] text-center">Qty (Kg)</th>
+                  <th className="border-r border-black py-1 px-1.5 font-bold w-[9%] text-center">Rate</th>
+                  <th className="py-1 px-1.5 font-bold w-[15%] text-right pr-2">Amount (₹)</th>
                 </tr>
               </thead>
               <tbody>
                 {items.map((item: any, index: number) => (
                   <tr key={index} className="align-top border-b border-black last:border-b-0">
-                    <td className="border-r border-black py-1 px-2 text-center">{index + 1}</td>
-                    <td className="border-r border-black py-1 px-2 text-left font-bold">{item.farmer_name}</td>
-                    <td className="border-r border-black py-1 px-2 font-bold">SW-{item.variety_name}</td>
-                    <td className="border-r border-black py-1 px-2 text-center font-mono text-[11px] font-semibold">{item.lot_no}</td>
-                    <td className="border-r border-black py-1 px-2 text-center font-semibold">{item.bags}</td>
-                    <td className="border-r border-black py-1 px-2 text-center font-bold">{(Number(item.bags) * packSize).toFixed(2)}</td>
+                    {/* INCREASED PADDING: py-1.5 adds vertical space between rows */}
+                    <td className="border-r border-black py-1.5 px-1.5 text-center">{index + 1}</td>
+                    <td className="border-r border-black py-1.5 px-1.5 text-left font-bold">{item.farmer_name}</td>
+                    <td className="border-r border-black py-1.5 px-1.5 font-bold text-[11px] tracking-tight whitespace-nowrap">Wheat-SW-{item.variety_name}</td>
+                    <td className="border-r border-black py-1.5 px-1.5 text-center font-mono text-[11px] font-semibold tracking-tighter whitespace-nowrap">{item.lot_no}</td>
+                    <td className="border-r border-black py-1.5 px-1.5 text-center font-semibold">{item.bags}</td>
+                    <td className="border-r border-black py-1.5 px-1.5 text-center font-bold">{(Number(item.bags) * packSize).toFixed(2)}</td>
                     <td className="border-r border-black p-0 text-center">
-                        <input type="number" value={rates[index]} onChange={(e) => handleRateChange(index, Number(e.target.value))} className="w-full h-full text-center bg-yellow-50 outline-none print:appearance-none text-[13px] py-1 font-bold print:bg-transparent" step="0.01" />
+                        <input type="number" value={rates[index]} onChange={(e) => handleRateChange(index, Number(e.target.value))} className="w-full h-full text-center bg-yellow-50 outline-none print:appearance-none text-[12px] py-1.5 font-bold print:bg-transparent" step="0.01" />
                     </td>
-                    <td className="py-1 px-2 text-right font-bold pr-2">{(Number(item.bags) * packSize * rates[index]).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                    <td className="py-1.5 px-1.5 text-right font-bold pr-2 whitespace-nowrap">{(Number(item.bags) * packSize * rates[index]).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
 
-          {/* TOTALS ROW: HSN Code injected here, saving space */}
           <div className="flex border-t-2 border-b-2 border-black bg-gray-100 print:bg-transparent font-bold items-center text-[14px]">
              <div className="w-[54%] border-r border-black p-2 flex justify-between items-center">
                  <span className="text-[11px] font-bold text-gray-700 print:text-black">HSN/SAC: 10019010</span>
@@ -317,7 +333,7 @@ function InvoiceTemplate({ shipment, items, packSize, transportRate, dispatchFro
              <div className="w-[8%] border-r border-black p-2 text-center">{totalBags}</div>
              <div className="w-[10%] border-r border-black p-2 text-center">{totalQty.toFixed(2)} KG.</div>
              <div className="w-[10%] border-r border-black p-2 text-center"></div>
-             <div className="w-[18%] p-2 text-right pr-2">₹ {totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+             <div className="w-[18%] p-2 text-right pr-2 whitespace-nowrap">₹ {totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
           </div>
 
           <div className="border-b-2 border-black p-2 flex justify-between items-center">
@@ -329,7 +345,6 @@ function InvoiceTemplate({ shipment, items, packSize, transportRate, dispatchFro
             </div>
           </div>
 
-          {/* Reduced min-height from 45mm to 38mm */}
           <div className="flex min-h-[38mm]">
             <div className="w-1/2 border-r-2 border-black p-2 flex flex-col justify-between text-[11px] leading-tight">
               <p>
@@ -362,10 +377,9 @@ function InvoiceTemplate({ shipment, items, packSize, transportRate, dispatchFro
   );
 }
 
-// ============================================================================
-// TEMPLATE 2: DELIVERY CHALLAN A4 PAGE (OPTIMIZED FOR 8 ITEMS)
-// ============================================================================
 function DCTemplate({ shipment, items, packSize, dispatchFrom, destinationCity, invoiceNo, selectedShipTo, rates, handleRateChange, totalBags, totalQty, totalAmount }: any) {
+  const displayAddress = selectedShipTo || "No delivery address selected";
+
   return (
     <div className="w-[210mm] h-[296mm] mx-auto bg-white p-[10mm] text-[13px] leading-[1.4] box-border relative flex flex-col overflow-hidden text-black">
         <div className="border-2 border-black w-full flex flex-col h-fit">
@@ -383,13 +397,16 @@ function DCTemplate({ shipment, items, packSize, dispatchFrom, destinationCity, 
             <div className="w-1/2 p-2 flex flex-col">
               <p className="font-bold underline mb-1 text-[12px]">Consignee (Ship to)</p>
               <p className="font-bold text-[15px] uppercase">{shipment.dest_name}</p>
-              <p className="whitespace-pre-wrap leading-tight">{selectedShipTo}</p>
+              <p className={`whitespace-pre-wrap leading-tight ${!selectedShipTo ? 'text-red-500 font-bold italic underline decoration-red-500' : ''}`}>
+                {displayAddress}
+              </p>
               <div className="mt-1 text-[13px]">
                 {shipment.gst_no && <p><span className="font-bold">GST NO:</span> {shipment.gst_no}</p>}
                 {shipment.dest_mobile && <p><span className="font-bold">Mobile no:</span> {shipment.dest_mobile}</p>}
               </div>
             </div>
           </div>
+          
           <div className="border-b-2 border-black">
               <div className="grid grid-cols-[180px_1fr]">
                   <div className="border-b border-r border-black p-1.5 font-bold bg-gray-50 print:bg-transparent pl-3 text-[13px]">DC / Invoice No.</div>
@@ -419,32 +436,32 @@ function DCTemplate({ shipment, items, packSize, dispatchFrom, destinationCity, 
           </div>
           
           <div className="flex flex-col flex-grow">
-            <table className="w-full border-collapse text-[13px]">
+            <table className="w-full border-collapse text-[12px] leading-tight">
               <thead>
-                <tr className="border-b-2 border-black bg-gray-100 print:bg-transparent">
-                  <th className="border-r border-black py-1.5 px-2 font-bold w-[5%] text-center">Sr.<br/>No.</th>
-                  <th className="border-r border-black py-1.5 px-2 font-bold w-[18%] text-left">Farmer Name</th>
-                  <th className="border-r border-black py-1.5 px-2 font-bold w-[18%] text-left">Item Name</th>
-                  <th className="border-r border-black py-1.5 px-2 font-bold w-[13%] text-center">Lot No.</th>
-                  <th className="border-r border-black py-1.5 px-2 font-bold w-[8%] text-center">Bags<br/><span className="font-normal text-[10px]">({packSize} Kg)</span></th>
-                  <th className="border-r border-black py-1.5 px-2 font-bold w-[10%] text-center">Qty (Kg)</th>
-                  <th className="border-r border-black py-1.5 px-2 font-bold w-[10%] text-center">Rate</th>
-                  <th className="py-1.5 px-2 font-bold w-[18%] text-right pr-2">Amount (₹)</th>
+                <tr className="border-b-2 border-black bg-gray-100 print:bg-transparent text-[12px]">
+                  <th className="border-r border-black py-1 px-1.5 font-bold w-[4%] text-center">Sr.</th>
+                  <th className="border-r border-black py-1 px-1.5 font-bold w-[30%] text-left">Farmer Name</th>
+                  <th className="border-r border-black py-1 px-1.5 font-bold w-[13%] text-left">Item Name</th>
+                  <th className="border-r border-black py-1 px-1.5 font-bold w-[11%] text-center">Lot No.</th>
+                  <th className="border-r border-black py-1 px-1.5 font-bold w-[8%] text-center">Bags<br/><span className="font-normal text-[9px]">({packSize} Kg)</span></th>
+                  <th className="border-r border-black py-1 px-1.5 font-bold w-[10%] text-center">Qty (Kg)</th>
+                  <th className="border-r border-black py-1 px-1.5 font-bold w-[9%] text-center">Rate</th>
+                  <th className="py-1 px-1.5 font-bold w-[15%] text-right pr-2">Amount (₹)</th>
                 </tr>
               </thead>
               <tbody>
                 {items.map((item: any, index: number) => (
                   <tr key={index} className="align-top border-b border-black last:border-b-0">
-                    <td className="border-r border-black py-1 px-2 text-center">{index + 1}</td>
-                    <td className="border-r border-black py-1 px-2 text-left font-bold">{item.farmer_name}</td>
-                    <td className="border-r border-black py-1 px-2 font-bold">SW-{item.variety_name}</td>
-                    <td className="border-r border-black py-1 px-2 text-center font-mono text-[11px] font-semibold">{item.lot_no}</td>
-                    <td className="border-r border-black py-1 px-2 text-center font-semibold">{item.bags}</td>
-                    <td className="border-r border-black py-1 px-2 text-center font-bold">{(Number(item.bags) * packSize).toFixed(2)}</td>
+                    <td className="border-r border-black py-1.5 px-1.5 text-center">{index + 1}</td>
+                    <td className="border-r border-black py-1.5 px-1.5 text-left font-bold">{item.farmer_name}</td>
+                    <td className="border-r border-black py-1.5 px-1.5 font-bold text-[11px] tracking-tight whitespace-nowrap">Wheat-SW-{item.variety_name}</td>
+                    <td className="border-r border-black py-1.5 px-1.5 text-center font-mono text-[11px] font-semibold tracking-tighter whitespace-nowrap">{item.lot_no}</td>
+                    <td className="border-r border-black py-1.5 px-1.5 text-center font-semibold">{item.bags}</td>
+                    <td className="border-r border-black py-1.5 px-1.5 text-center font-bold">{(Number(item.bags) * packSize).toFixed(2)}</td>
                     <td className="border-r border-black p-0 text-center">
-                        <input type="number" value={rates[index]} onChange={(e) => handleRateChange(index, Number(e.target.value))} className="w-full h-full text-center bg-yellow-50 outline-none print:appearance-none text-[13px] py-1 font-bold print:bg-transparent" step="0.01" />
+                        <input type="number" value={rates[index]} onChange={(e) => handleRateChange(index, Number(e.target.value))} className="w-full h-full text-center bg-yellow-50 outline-none print:appearance-none text-[12px] py-1.5 font-bold print:bg-transparent" step="0.01" />
                     </td>
-                    <td className="py-1 px-2 text-right font-bold pr-2">{(Number(item.bags) * packSize * rates[index]).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                    <td className="py-1.5 px-1.5 text-right font-bold pr-2 whitespace-nowrap">{(Number(item.bags) * packSize * rates[index]).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                   </tr>
                 ))}
               </tbody>
@@ -459,7 +476,7 @@ function DCTemplate({ shipment, items, packSize, dispatchFrom, destinationCity, 
              <div className="w-[8%] border-r border-black p-2 text-center">{totalBags}</div>
              <div className="w-[10%] border-r border-black p-2 text-center">{totalQty.toFixed(2)} KG.</div>
              <div className="w-[10%] border-r border-black p-2 text-center"></div>
-             <div className="w-[18%] p-2 text-right pr-2">₹ {totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+             <div className="w-[18%] p-2 text-right pr-2 whitespace-nowrap">₹ {totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
           </div>
 
           <div className="flex min-h-[38mm]">
