@@ -173,10 +173,10 @@ export async function getShipmentBillData(shipmentId: number) {
             cl.lot_number as lot_no,
             se.variety_name,
             cc.purchase_rate, 
-            cl.bags_weighed as bags -- Use the exact bags from the lot, not the whole cycle
+            si.bags_loaded as bags -- FIX: Now fetching the actual partial amount loaded into the truck
         FROM shipment_items si
         JOIN crop_cycles cc ON si.crop_cycle_id = cc.crop_cycle_id
-        JOIN cycle_lots cl ON cl.crop_cycle_id = cc.crop_cycle_id -- Splitting into separate rows
+        JOIN cycle_lots cl ON cl.crop_cycle_id = cc.crop_cycle_id 
         JOIN farmers f ON cc.farmer_id = f.farmer_id
         JOIN seeds se ON cc.seed_id = se.seed_id
         JOIN farms fm ON cc.farm_id = fm.farm_id
