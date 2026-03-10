@@ -167,22 +167,52 @@ export async function getShipmentBillData(shipmentId: number) {
 
     // 2. Fetch Item Details - NOW JOINING cycle_lots DIRECTLY FOR SEPARATE ROWS
     const itemsRes = await sql`
+        WITH AllocatedLots AS (
+            SELECT 
+                f.name as farmer_name,
+                COALESCE(v.village_name, '') as village_name,
+                cl.lot_number as lot_no,
+                se.variety_name,
+                cc.purchase_rate,
+                cl.bags_weighed,
+                si.bags_loaded,
+                -- Calculate running total of bags weighed for this specific crop cycle
+                SUM(cl.bags_weighed) OVER (PARTITION BY cc.crop_cycle_id ORDER BY cl.lot_number) as running_total_weighed,
+                -- Calculate previous running total to know where the last lot left off
+                COALESCE(SUM(cl.bags_weighed) OVER (PARTITION BY cc.crop_cycle_id ORDER BY cl.lot_number ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING), 0) as prev_running_total
+            FROM shipment_items si
+            JOIN crop_cycles cc ON si.crop_cycle_id = cc.crop_cycle_id
+            JOIN cycle_lots cl ON cl.crop_cycle_id = cc.crop_cycle_id 
+            JOIN farmers f ON cc.farmer_id = f.farmer_id
+            JOIN seeds se ON cc.seed_id = se.seed_id
+            JOIN farms fm ON cc.farm_id = fm.farm_id
+            LEFT JOIN villages v ON fm.village_id = v.village_id
+            WHERE si.shipment_id = ${shipmentId}
+        )
         SELECT 
-            f.name as farmer_name,
-            COALESCE(v.village_name, '') as village_name,
-            cl.lot_number as lot_no,
-            se.variety_name,
-            cc.purchase_rate, 
-            si.bags_loaded as bags -- FIX: Now fetching the actual partial amount loaded into the truck
-        FROM shipment_items si
-        JOIN crop_cycles cc ON si.crop_cycle_id = cc.crop_cycle_id
-        JOIN cycle_lots cl ON cl.crop_cycle_id = cc.crop_cycle_id 
-        JOIN farmers f ON cc.farmer_id = f.farmer_id
-        JOIN seeds se ON cc.seed_id = se.seed_id
-        JOIN farms fm ON cc.farm_id = fm.farm_id
-        LEFT JOIN villages v ON fm.village_id = v.village_id
-        WHERE si.shipment_id = ${shipmentId}
-        ORDER BY f.name, se.variety_name, cl.lot_number
+            farmer_name,
+            village_name,
+            lot_no,
+            variety_name,
+            purchase_rate,
+            -- The Magic: Allocate bags based on what was actually loaded
+            CASE 
+                -- If the loaded amount covers this whole lot, take the full lot amount
+                WHEN running_total_weighed <= bags_loaded THEN bags_weighed
+                -- If the loaded amount falls partially inside this lot, take the remainder
+                WHEN prev_running_total < bags_loaded THEN bags_loaded - prev_running_total
+                -- Otherwise, 0 (this lot wasn't loaded)
+                ELSE 0
+            END as bags
+        FROM AllocatedLots
+        WHERE 
+            -- Filter out any lots that ended up with 0 bags allocated
+            CASE 
+                WHEN running_total_weighed <= bags_loaded THEN bags_weighed
+                WHEN prev_running_total < bags_loaded THEN bags_loaded - prev_running_total
+                ELSE 0
+            END > 0
+        ORDER BY farmer_name, variety_name, lot_no;
     `;
 
     return {
