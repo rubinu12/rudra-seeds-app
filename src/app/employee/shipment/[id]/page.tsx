@@ -48,8 +48,13 @@ type ManifestItem = {
   variety_name: string;
   color_code: string;
   crop_cycle_id: number;
+  lot_no: string;
 };
 
+type GroupedFarmer = FarmerStock & {
+  lots: { lot_no: string; bags_remaining: number }[];
+  total_remaining: number;
+};
 // --- CONSTANTS & TRANSLATIONS ---
 const LOCATIONS = ["Parabadi yard", "Dhoraji yard", "Jalasar yard", "Farm"];
 
@@ -199,10 +204,25 @@ export default function ShipmentDetailsPage() {
   };
 
   // --- FILTERS ---
+ // --- FILTERS ---
   const checkLocation = (farmerLoc: string | null, targetLoc: string) => {
     const t = (targetLoc || "").toLowerCase().replace(" yard", "").trim();
     const f = (farmerLoc || "Farm").toLowerCase().replace(" yard", "").trim();
     return f.includes(t);
+  };
+
+  // NEW HELPER: Groups any list of farmers by Crop Cycle ID
+  const groupFarmers = (list: FarmerStock[]): GroupedFarmer[] => {
+    const map = new Map<number, GroupedFarmer>();
+    list.forEach(f => {
+      if (!map.has(f.crop_cycle_id)) {
+        map.set(f.crop_cycle_id, { ...f, lots: [], total_remaining: 0 });
+      }
+      const group = map.get(f.crop_cycle_id)!;
+      group.lots.push({ lot_no: f.lot_no, bags_remaining: Number(f.bags_remaining) });
+      group.total_remaining += Number(f.bags_remaining);
+    });
+    return Array.from(map.values());
   };
 
   const farmersAtLocation = useMemo(
@@ -210,8 +230,9 @@ export default function ShipmentDetailsPage() {
     [farmers, currentLocation]
   );
 
+  // Apply grouping to Location Mismatches
   const locationMismatches = useMemo(
-    () => farmers.filter((f) => !checkLocation(f.collection_loc, currentLocation)),
+    () => groupFarmers(farmers.filter((f) => !checkLocation(f.collection_loc, currentLocation))),
     [farmers, currentLocation]
   );
 
@@ -228,6 +249,7 @@ export default function ShipmentDetailsPage() {
     });
   }, [farmersAtLocation, selectedVillage, searchTerm]);
 
+  // Apply grouping to Best Matches and Variety Mismatches
   const { bestMatches, varietyMismatches } = useMemo(() => {
     const best: FarmerStock[] = [];
     const mismatch: FarmerStock[] = [];
@@ -236,7 +258,10 @@ export default function ShipmentDetailsPage() {
       if (allowed.includes(f.seed_id)) best.push(f);
       else mismatch.push(f);
     });
-    return { bestMatches: best, varietyMismatches: mismatch };
+    return { 
+        bestMatches: groupFarmers(best), 
+        varietyMismatches: groupFarmers(mismatch) 
+    };
   }, [displayedFarmers, shipment]);
 
   // --- ACTIONS ---
@@ -517,16 +542,20 @@ export default function ShipmentDetailsPage() {
                             <div className="absolute left-0 top-0 bottom-0 w-1.5" style={{ backgroundColor: item.color_code || '#cbd5e1' }} />
                             
                             <div className="pl-3 flex-1 min-w-0">
-                                <h4 className="font-bold text-slate-900 text-sm leading-tight truncate">{item.farmer_name}</h4>
-                                <div className="flex items-center gap-2 mt-1.5">
-                                    <span className="text-[10px] font-bold uppercase text-slate-600 px-1.5 py-0.5 rounded border" style={{ backgroundColor: `${item.color_code}20`, borderColor: `${item.color_code}40`, color: item.color_code }}>
-                                        {item.variety_name}
-                                    </span>
-                                    <span className="text-[10px] font-medium text-slate-400 flex items-center gap-0.5 truncate max-w-[100px]">
-                                        <MapPin className="w-2.5 h-2.5" /> {item.village_name || 'Unknown'}
-                                    </span>
-                                </div>
-                            </div>
+      <h4 className="font-bold text-slate-900 text-sm leading-tight truncate">{item.farmer_name}</h4>
+      <div className="flex items-center gap-2 mt-1.5">
+          <span className="text-[10px] font-bold uppercase text-slate-600 px-1.5 py-0.5 rounded border" style={{ backgroundColor: `${item.color_code}20`, borderColor: `${item.color_code}40`, color: item.color_code }}>
+              {item.variety_name}
+          </span>
+          {/* --- THIS IS THE MANIFEST LOT NO UPDATE --- */}
+          <span className="text-[10px] font-bold text-slate-600 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded shadow-sm">
+              Lot: {item.lot_no || 'N/A'}
+          </span>
+          <span className="text-[10px] font-medium text-slate-400 flex items-center gap-0.5 truncate max-w-[100px]">
+              <MapPin className="w-2.5 h-2.5" /> {item.village_name || 'Unknown'}
+          </span>
+      </div>
+  </div>
                             
                             <div className="flex items-center gap-4 shrink-0 pl-2">
                                 <div className="text-right">
@@ -632,23 +661,20 @@ function LoadCard({
   onAction,
   warningMessage,
 }: {
-  farmer: FarmerStock;
+  farmer: GroupedFarmer; // <-- Uses our new Grouped type
   shipment: ActiveShipment;
   onUpdate: () => void;
   onAction: (qty: number) => void;
   warningMessage?: string;
 }) {
   const [isOpen, setIsOpen] = useState(false);
-  const [bags, setBags] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [inputs, setInputs] = useState<{ [key: string]: string }>({});
+  const [loadingLot, setLoadingLot] = useState<string | null>(null); // Tracks which lot is currently saving
 
-  useEffect(() => { if (isOpen && inputRef.current) setTimeout(() => inputRef.current?.focus(), 100); }, [isOpen]);
-
-  const handleAdd = async () => {
-    const qty = Number(bags);
+  const handleAdd = async (lotNo: string, availableBags: number) => {
+    const qty = Number(inputs[lotNo]);
     if (!qty || qty <= 0) return;
-    if (qty > farmer.bags_remaining) { toast.error(TXT.error_limit); return; }
+    if (qty > availableBags) { toast.error(TXT.error_limit); return; }
 
     const maxCapacity = shipment.target_bag_capacity + 50; 
     const currentTotal = shipment.total_bags;
@@ -656,16 +682,19 @@ function LoadCard({
 
     if (qty > availableSpace) { toast.error(TXT.error_truck_full); return; }
 
-    setIsSaving(true);
-    const res = await addBagsToShipment(shipment.shipment_id, farmer.crop_cycle_id, qty);
+    setLoadingLot(lotNo);
+    // Passing all 4 arguments exactly as required by your updated backend
+    const res = await addBagsToShipment(shipment.shipment_id, farmer.crop_cycle_id, qty, lotNo);
 
     if (res.success) {
-      setIsOpen(false); setBags(""); onUpdate(); onAction(qty);
+      setInputs((prev) => ({ ...prev, [lotNo]: "" })); 
+      onUpdate(); 
+      onAction(qty);
       toast.success(`${qty} ${TXT.toast_loaded}`);
     } else {
       toast.error(res.message);
     }
-    setIsSaving(false);
+    setLoadingLot(null);
   };
 
   const isWarning = !!warningMessage;
@@ -673,6 +702,8 @@ function LoadCard({
   return (
     <div className={`bg-white rounded-2xl border shadow-sm transition-all duration-300 overflow-hidden relative ${isOpen ? "ring-2 ring-blue-500 border-transparent shadow-md" : "border-slate-100 hover:border-slate-200"}`}>
       <div className="absolute left-0 top-0 bottom-0 w-1.5 z-10" style={{ backgroundColor: farmer.color_code || "#cbd5e1" }} />
+      
+      {/* CARD HEADER (Farmer Summary) */}
       <div onClick={() => setIsOpen(!isOpen)} className="p-4 pl-6 flex justify-between items-center cursor-pointer active:bg-slate-50 transition-colors">
         <div className="flex-1 min-w-0 pr-2">
           <h3 className="font-bold text-slate-800 text-base truncate">{farmer.farmer_name}</h3>
@@ -682,13 +713,16 @@ function LoadCard({
           </div>
         </div>
         <div className="text-right shrink-0">
-          <span className="block text-xl font-black text-slate-900 leading-none">{farmer.bags_remaining}</span>
+          <span className="block text-xl font-black text-slate-900 leading-none">{farmer.total_remaining}</span>
           <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wide">{TXT.avail}</span>
         </div>
       </div>
+
+      {/* EXPANDED SECTION (Individual Lots) */}
       {isOpen && (
         <div className="px-4 pl-6 pb-4 pt-0 animate-in slide-in-from-top-2 fade-in duration-200">
           <div className="h-px w-full bg-slate-100 mb-4" />
+          
           {isWarning && (
             <div className="mb-3 p-3 bg-orange-50 border border-orange-100 text-orange-800 text-xs rounded-xl font-medium flex items-start gap-2">
               <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
@@ -698,15 +732,46 @@ function LoadCard({
               </div>
             </div>
           )}
-          <div className="flex gap-3">
-            <div className="relative w-32">
-              <input ref={inputRef} type="number" placeholder={TXT.bags} value={bags} onChange={(e) => setBags(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleAdd()} className="w-full p-3.5 text-center font-bold text-lg bg-slate-50 border border-slate-200 rounded-xl outline-none focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all placeholder:text-slate-300" />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400 pointer-events-none uppercase">{TXT.bags}</span>
-            </div>
-            <button onClick={handleAdd} disabled={isSaving || !bags || Number(bags) <= 0} className={`flex-1 rounded-xl font-bold text-white flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 disabled:opacity-50 disabled:active:scale-100 ${isWarning ? "bg-orange-500 hover:bg-orange-600 shadow-orange-200" : "bg-slate-900 hover:bg-slate-800 shadow-slate-200"}`}>
-              {isSaving ? <><LoaderCircle className="w-5 h-5 animate-spin" /> {TXT.saving}</> : <><PackagePlus className="w-5 h-5" /> {isWarning ? TXT.force_load : TXT.load_bags}</>}
-            </button>
+
+          {/* LOT ROWS */}
+          <div className="space-y-3">
+            {farmer.lots.map((lot) => {
+              const isSavingThis = loadingLot === lot.lot_no;
+              const inputValue = inputs[lot.lot_no] || "";
+
+              return (
+                <div key={lot.lot_no} className="flex items-center justify-between gap-3 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                  <div className="flex-1 min-w-0 pl-1">
+                    <div className="text-[10px] font-bold text-slate-400 uppercase leading-none mb-1">Lot No.</div>
+                    <div className="font-black text-slate-800 text-sm truncate">{lot.lot_no || 'N/A'}</div>
+                  </div>
+                  
+                  <div className="text-right pr-4 border-r border-slate-200">
+                    <div className="text-[10px] font-bold text-slate-400 uppercase leading-none mb-1">Available</div>
+                    <div className="font-bold text-slate-700 text-sm">{lot.bags_remaining}</div>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <input 
+                      type="number" 
+                      placeholder={TXT.bags} 
+                      value={inputValue} 
+                      onChange={(e) => setInputs(prev => ({ ...prev, [lot.lot_no]: e.target.value }))} 
+                      className="w-16 p-2 text-center font-bold text-sm bg-white border border-slate-200 rounded-lg outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all" 
+                    />
+                    <button 
+                      onClick={() => handleAdd(lot.lot_no, lot.bags_remaining)} 
+                      disabled={isSavingThis || !inputValue || Number(inputValue) <= 0} 
+                      className={`px-3 rounded-lg font-bold text-white flex items-center justify-center gap-1.5 transition-all shadow-sm active:scale-95 disabled:opacity-50 text-xs ${isWarning ? "bg-orange-500 hover:bg-orange-600" : "bg-slate-900 hover:bg-slate-800"}`}
+                    >
+                      {isSavingThis ? <LoaderCircle className="w-3.5 h-3.5 animate-spin" /> : <PackagePlus className="w-3.5 h-3.5" />} Load
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
+
         </div>
       )}
     </div>

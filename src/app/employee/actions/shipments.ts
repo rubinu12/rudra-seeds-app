@@ -210,50 +210,49 @@ export async function getFarmersForLoading(): Promise<FarmerStock[]> {
   const userId = session?.user?.id ? Number(session.user.id) : 0;
 
   try {
+    // We now JOIN with cycle_lots so EVERY lot gets its own separate card in the UI
     const res = await sql`
             SELECT 
                 cc.crop_cycle_id, 
                 f.name as farmer_name, 
                 COALESCE(v.village_name, 'Unknown') as village_name,
                 
-                -- [FIX] Fallback Logic: If bags_remaining is 0/NULL (initial state), use total quantity
-                COALESCE(NULLIF(cc.bags_remaining_to_load, 0), cc.quantity_in_bags, 0) as bags_remaining,
+                cl.lot_number as lot_no,
+                
+                -- Calculate remaining bags FOR THIS SPECIFIC LOT:
+                -- (Total Weighed for this lot) MINUS (Bags already loaded from this lot into ANY shipment)
+                (cl.bags_weighed - COALESCE((
+                    SELECT SUM(si.bags_loaded) 
+                    FROM shipment_items si 
+                    WHERE si.crop_cycle_id = cc.crop_cycle_id AND si.lot_no = cl.lot_number
+                ), 0)) as bags_remaining,
                 
                 cc.seed_id,
                 s.variety_name as seed_variety,
                 s.color_code,
                 
-                -- [FIX] Fields required for UI Filtering
                 COALESCE(cc.goods_collection_method, 'Farm') as collection_loc, 
                 
-                -- [FIX] Dynamic Assignment Check
                 CASE 
                     WHEN EXISTS (
                         SELECT 1 FROM employee_assignments ea 
                         WHERE ea.user_id = ${userId} AND ea.seed_id = cc.seed_id
                     ) THEN true 
                     ELSE false 
-                END as is_assigned,
-
-                -- [FIX] Fetch Multi-Lots
-                (
-                    SELECT STRING_AGG(lot_number, ', ') 
-                    FROM cycle_lots 
-                    WHERE crop_cycle_id = cc.crop_cycle_id
-                ) as lot_no
+                END as is_assigned
 
             FROM crop_cycles cc
+            JOIN cycle_lots cl ON cc.crop_cycle_id = cl.crop_cycle_id -- <--- JOINING LOTS HERE
             JOIN farmers f ON cc.farmer_id = f.farmer_id
             JOIN farms fm ON cc.farm_id = fm.farm_id
             LEFT JOIN villages v ON fm.village_id = v.village_id
             JOIN seeds s ON cc.seed_id = s.seed_id
             
-            -- [FIX] Broader Status Check
             WHERE cc.status IN ('Weighed', 'Loading', 'Partially Loaded')
-            ORDER BY cc.crop_cycle_id DESC
+            ORDER BY cc.crop_cycle_id DESC, cl.lot_number ASC
         `;
 
-    // Filter out rows where calculated bags_remaining is 0 (Completed)
+    // Only show lots that actually have bags left to load
     return (res.rows as FarmerStock[]).filter(
       (r) => Number(r.bags_remaining) > 0,
     );
@@ -263,10 +262,12 @@ export async function getFarmersForLoading(): Promise<FarmerStock[]> {
   }
 }
 
+// NOTE: Added lotNo as the 4th argument here!
 export async function addBagsToShipment(
   shipmentId: number,
   cycleId: number,
   bagsToAdd: number,
+  lotNo: string, 
 ) {
   const session = await auth();
   const userId = session?.user?.id ? Number(session.user.id) : null;
@@ -275,6 +276,7 @@ export async function addBagsToShipment(
   try {
     const [shipmentRes, check] = await Promise.all([
       sql`SELECT total_bags, target_bag_capacity FROM shipments WHERE shipment_id = ${shipmentId}`,
+      // FIX 1: Make sure we fetch quantity_in_bags as a fallback!
       sql`SELECT bags_remaining_to_load, quantity_in_bags FROM crop_cycles WHERE crop_cycle_id = ${cycleId}`,
     ]);
 
@@ -291,28 +293,29 @@ export async function addBagsToShipment(
       };
     }
 
-    // --- Stock Validation ---
-    const cycleRow = check.rows[0];
-    // Use same fallback logic as fetcher
-    const currentStock =
-      cycleRow.bags_remaining_to_load > 0
-        ? cycleRow.bags_remaining_to_load
-        : cycleRow.quantity_in_bags;
-
-    if (bagsToAdd > currentStock) {
-      return {
-        success: false,
-        message: `Not enough bags. Available: ${currentStock}`,
-      };
-    }
-
     await sql`BEGIN`;
 
-    await sql`INSERT INTO shipment_items (shipment_id, crop_cycle_id, bags_loaded, added_at, loaded_by) VALUES (${shipmentId}, ${cycleId}, ${bagsToAdd}, NOW(), ${userId})`;
+    // 1. Insert into shipment_items
+    await sql`
+        INSERT INTO shipment_items (shipment_id, crop_cycle_id, lot_no, bags_loaded, added_at, loaded_by) 
+        VALUES (${shipmentId}, ${cycleId}, ${lotNo}, ${bagsToAdd}, NOW(), ${userId})
+    `;
+    
+    // 2. Update Shipments Total
     await sql`UPDATE shipments SET total_bags = total_bags + ${bagsToAdd} WHERE shipment_id = ${shipmentId}`;
 
+    // 3. Update Crop Cycle Total Remaining
+    const cycleRow = check.rows[0];
+    
+    // FIX 2: If bags_remaining is 0 (initial state), use the total weighed quantity instead
+    const currentStock = cycleRow.bags_remaining_to_load > 0 
+        ? cycleRow.bags_remaining_to_load 
+        : cycleRow.quantity_in_bags;
+
     const newRem = currentStock - bagsToAdd;
-    const newStatus = newRem === 0 ? "Loaded" : "Loading";
+    
+    // If there are still bags left, keep them in "Loading" status so they don't disappear!
+    const newStatus = newRem <= 0 ? "Loaded" : "Loading";
 
     await sql`
             UPDATE crop_cycles 
@@ -403,7 +406,7 @@ export async function getShipmentManifest(shipmentId: number) {
   try {
     const res = await sql`
       SELECT 
-        si.item_id, si.bags_loaded, si.added_at,
+        si.item_id, si.bags_loaded, si.added_at, si.lot_no, -- <--- FETCH THE LOT NO HERE
         f.name as farmer_name, COALESCE(v.village_name, 'Unknown') as village_name,
         s.variety_name, s.color_code, cc.crop_cycle_id
       FROM shipment_items si
