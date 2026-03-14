@@ -169,13 +169,7 @@ export async function bulkCreateCycles(queue: QueuedCycle[]): Promise<BatchRespo
       }
 
       // --- 7. Wallet Transaction (If Paid) ---
-      if (finalAmountPaid > 0) {
-          await sql`
-              INSERT INTO wallet_transactions (wallet_id, amount, transaction_type, description, reference_id)
-              VALUES (1, ${finalAmountPaid}, 'CREDIT', ${`Seed Payment for Cycle #${cycleId}`}, ${cycleId})
-          `;
-          await sql`UPDATE virtual_wallets SET balance = balance + ${finalAmountPaid} WHERE wallet_id = 1`;
-      }
+      
 
       await sql`COMMIT`; // Commit success for this item
       
