@@ -31,10 +31,13 @@ export type FarmerPaymentDetails = {
     quantity_in_bags: number;
     purchase_rate: number;
     amount_remaining: number;
+    seed_cost: number;                  
+    seed_payment_status: string | null;
     seed_variety: string;
     final_payment_date: string | null;
     vehicle_number: string | null;
     dispatch_date: string | null;
+    loading_date: string | null;
     cheque_details: StoredChequeDetail[];
     farmer_name: string;
     village_name: string;
@@ -144,10 +147,13 @@ export async function getFarmerPaymentDetails(cycleId: number): Promise<FarmerPa
                 cc.quantity_in_bags,
                 cc.purchase_rate,
                 cc.amount_remaining,
+                cc.seed_cost,            
+                cc.seed_payment_status,
                 cc.cheque_details,
                 cc.lot_no,
                 cc.bill_number, -- [NEW] Fetching Bill Number
                 TO_CHAR(cc.final_payment_date, 'YYYY-MM-DD') as final_payment_date,
+                TO_CHAR(cc.loading_date, 'YYYY-MM-DD') as loading_date,
                 f.name as farmer_name,
                 v.village_name,
                 s.variety_name as seed_variety,
@@ -206,6 +212,7 @@ export async function getFarmerPaymentDetails(cycleId: number): Promise<FarmerPa
         return {
             lot_no: cycleData.lot_no,
             bill_number: cycleData.bill_number as string | null, // [NEW] Return mapped bill_number
+            loading_date: cycleData.loading_date as string | null,
             final_payment: netPayment,
             total_payment: netPayment,
             crop_cycle_id: Number(cycleData.crop_cycle_id),
@@ -216,6 +223,8 @@ export async function getFarmerPaymentDetails(cycleId: number): Promise<FarmerPa
             farmer_name: cycleData.farmer_name,
             village_name: cycleData.village_name,
             seed_variety: cycleData.seed_variety,
+            seed_cost: Number(cycleData.seed_cost ?? 0),                      // <-- NEW
+            seed_payment_status: cycleData.seed_payment_status as string | null,
             final_payment_date: cycleData.final_payment_date as string | null,
             vehicle_number: cycleData.vehicle_number as string | null,
             dispatch_date: cycleData.dispatch_date as string | null,

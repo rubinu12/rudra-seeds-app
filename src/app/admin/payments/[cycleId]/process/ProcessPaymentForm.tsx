@@ -58,7 +58,11 @@ export default function ProcessPaymentForm({
   const [ratePerKg, setRatePerKg] = useState(initialRatePerKg);
 
   const bags = paymentDetails.quantity_in_bags || 0;
-  const deduction = paymentDetails.amount_remaining || 0; 
+
+  // --- Seed Cost Toggle Logic ---
+  const [isSeedPaid, setIsSeedPaid] = useState(paymentDetails.seed_payment_status === 'Paid');
+  const baseDeduction = paymentDetails.seed_cost || paymentDetails.amount_remaining || 0;
+  const deduction = isSeedPaid ? 0 : baseDeduction;
 
   const grossTotal = ratePerKg * 50 * bags;
   const netPayable = grossTotal - deduction;
@@ -78,10 +82,17 @@ export default function ProcessPaymentForm({
   const isMatched = Math.abs(remainingAmount) < 1;
 
   useEffect(() => {
-    const date = new Date();
-    date.setDate(date.getDate() + dueDays);
-    setNewDueDate(date.toISOString().split('T')[0]); 
-  }, [dueDays]);
+    // Use the cycle's loading_date if it exists, otherwise fallback to today's date
+    const baseDate = paymentDetails.loading_date 
+      ? new Date(paymentDetails.loading_date) 
+      : new Date();
+
+    // Add the due days (e.g., + 22 days)
+    baseDate.setDate(baseDate.getDate() + dueDays);
+    
+    // Format for the HTML <input type="date">
+    setNewDueDate(baseDate.toISOString().split('T')[0]); 
+  }, [dueDays, paymentDetails.loading_date]);
 
   const handleAddCheque = () => {
     if (!newPayee || !newChequeNo || !newAmount || !newDueDate) return;
@@ -125,6 +136,8 @@ export default function ProcessPaymentForm({
       <input type="hidden" name="netPayment" value={netPayable} />
       <input type="hidden" name="dueDays" value={dueDays} />
       <input type="hidden" name="cheque_details" value={JSON.stringify(chequeEntries)} />
+      <input type="hidden" name="seedPaymentStatus" value={isSeedPaid ? 'Paid' : 'Credit'} />
+      <input type="hidden" name="amountRemaining" value={deduction} />
 
       {/* --- LEFT COL: FINANCIAL SUMMARY --- */}
       <div className="lg:col-span-1 bg-white rounded-3xl p-6 shadow-sm border border-slate-200 sticky top-6">
@@ -166,10 +179,25 @@ export default function ProcessPaymentForm({
             <span className="text-slate-500 font-medium text-sm">Total Goods Value</span>
             <span className="font-bold text-slate-900">₹{formatRupee(grossTotal)}</span>
           </div>
+          
           <div className="flex justify-between items-center pb-4 border-b border-slate-100">
-            <span className="text-slate-500 font-medium text-sm">Less: Advance / Ded.</span>
+            <span className="text-slate-500 font-medium text-sm flex items-center gap-3">
+              Less: Seed Cost
+              <button 
+                type="button" 
+                onClick={() => setIsSeedPaid(!isSeedPaid)}
+                className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase transition-colors shadow-sm border ${
+                  isSeedPaid 
+                    ? 'bg-green-100 text-green-700 border-green-200 hover:bg-green-200' 
+                    : 'bg-red-100 text-red-700 border-red-200 hover:bg-red-200'
+                }`}
+              >
+                {isSeedPaid ? "Status: Paid (No Ded.)" : "Status: Credit (Deduct)"}
+              </button>
+            </span>
             <span className="font-bold text-red-600">- ₹{formatRupee(deduction)}</span>
           </div>
+
           <div className="bg-slate-900 rounded-2xl p-5 text-white">
             <p className="text-slate-400 text-xs font-bold uppercase mb-1">Net Payable Amount</p>
             <div className="flex items-center gap-1">
@@ -219,16 +247,20 @@ export default function ProcessPaymentForm({
                   onChange={(e) => setDueDays(Number(e.target.value))}
                   className="w-24 font-bold text-xl p-2 border-b-2 border-slate-200 focus:border-black outline-none bg-transparent"
                 />
-                <span className="text-sm font-medium text-slate-400">Days from today</span>
+                <span className="text-sm font-medium text-slate-400">
+    Days from {paymentDetails.loading_date ? "Loading Date" : "Today"}
+</span>
               </div>
             </div>
             <div className="bg-slate-50 p-3 rounded-xl">
               <p className="text-xs font-bold text-slate-400 uppercase mb-1">Calculated Default Date</p>
               <p className="text-sm font-bold text-slate-900">
-                {new Date(Date.now() + dueDays * 24 * 60 * 60 * 1000).toLocaleDateString("en-IN", {
-                  weekday: "long", year: "numeric", month: "long", day: "numeric",
-                })}
-              </p>
+    {newDueDate 
+      ? new Date(newDueDate).toLocaleDateString("en-IN", {
+          weekday: "long", year: "numeric", month: "long", day: "numeric",
+        }) 
+      : "Calculating..."}
+  </p>
             </div>
           </div>
         </div>

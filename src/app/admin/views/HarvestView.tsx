@@ -27,6 +27,7 @@ import SetTemporaryPriceModal from '@/src/components/admin/harvesting/SetTempora
 import VerifyPriceModal from '@/src/components/admin/harvesting/VerifyPriceModal';
 import SelectPaymentCycleModal from '@/src/components/admin/harvesting/SelectPaymentCycleModal';
 import FinanceActionModal from '@/src/components/admin/finance/FinanceActionModal';
+import HarvestProgressStrip from '@/src/components/admin/harvesting/HarvestProgressStrip';
 
 // --- Default Empty State for Finance (Prevents crashes before load) ---
 const initialFinanceData: FinanceData = {
@@ -189,6 +190,9 @@ export default function HarvestView() {
   return (
     <div className="space-y-8 animate-fadeIn max-w-screen-xl mx-auto">
       
+      <HarvestProgressStrip year={year} />
+
+
       {/* 1. Header with Connected Actions */}
       <WelcomeHeader 
         activeSeason="Harvesting"
@@ -206,6 +210,8 @@ export default function HarvestView() {
         onEditCycleClick={() => {}} // Placeholder
         onGenerateShipmentBillClick={() => router.push('/admin/shipments')}
       />
+
+      
 
       {/* 2. Metrics Grid */}
       <div className={`grid grid-cols-1 md:grid-cols-2 gap-6 transition-opacity duration-300 ${isStatsLoading && !stats ? 'opacity-30' : 'opacity-100'}`}>

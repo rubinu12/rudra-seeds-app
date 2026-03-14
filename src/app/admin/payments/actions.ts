@@ -78,6 +78,8 @@ const ProcessPaymentSchema = z.object({
     grossPayment: z.coerce.number(),
     netPayment: z.coerce.number().positive("Net payment must be positive."),
     dueDays: z.coerce.number().int().min(0).default(22),
+    seedPaymentStatus: z.enum(['Paid', 'Credit', 'Partial']), 
+    amountRemaining: z.coerce.number(),
     cheque_details: z.string().transform((str) => {
         try {
             const parsed = JSON.parse(str);
@@ -109,7 +111,7 @@ export async function processFarmerPaymentAction(
         };
     }
 
-    const { cycleId, grossPayment, netPayment, cheque_details } = validatedFields.data;
+    const { cycleId, grossPayment, netPayment, cheque_details, seedPaymentStatus, amountRemaining } = validatedFields.data;
     const paymentDate = new Date();
 
     // --- [AUTO-BILL LOGIC START] ---
@@ -156,6 +158,8 @@ export async function processFarmerPaymentAction(
                 bill_number = ${autoBillNumber},
                 total_payment = ${grossPayment},
                 final_payment = ${netPayment},
+                seed_payment_status = ${seedPaymentStatus},
+                amount_remaining = ${amountRemaining},
                 cheque_due_date = ${maxDueDateISO}, 
                 cheque_details = ${JSON.stringify(chequeDetailsForDb)},
                 status = 'paid',

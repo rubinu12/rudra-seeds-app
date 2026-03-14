@@ -2,7 +2,7 @@
 "use client";
 
 import { useState } from "react";
-import { CyclePipelineStatus } from "@/src/lib/admin-data"; // Import the type
+import { CyclePipelineStatus } from "@/src/lib/admin-data";
 import {
   ArrowRightCircle,
   Package,
@@ -10,6 +10,9 @@ import {
   Scale,
   ClipboardCheck,
 } from "lucide-react";
+
+// NEW: Import our modal
+import WeighedMetricsModal from "./WeighedMetricsModal"; 
 
 type Props = {
   data: CyclePipelineStatus;
@@ -19,6 +22,8 @@ type ViewMode = "total" | "last24Hours";
 
 export default function CyclePipelineCard({ data }: Props) {
   const [viewMode, setViewMode] = useState<ViewMode>("total");
+  // NEW: State to control the modal
+  const [isWeighedModalOpen, setIsWeighedModalOpen] = useState(false);
 
   const toggleViewMode = () => {
     setViewMode((prev) => (prev === "total" ? "last24Hours" : "total"));
@@ -64,30 +69,48 @@ export default function CyclePipelineCard({ data }: Props) {
           value={currentData.priced}
           color="text-amber-500"
         />
+        {/* NEW: Passed the onClick handler to the Weighed item */}
         <PipelineItem
           icon={Scale}
           label="Weighed"
           value={currentData.weighed}
           color="text-teal-500"
+          onClick={() => setIsWeighedModalOpen(true)}
         />
       </div>
+
+      {/* NEW: Mount the modal */}
+      <WeighedMetricsModal 
+        isOpen={isWeighedModalOpen} 
+        onClose={() => setIsWeighedModalOpen(false)} 
+      />
     </div>
   );
 }
 
 // Small helper component for each status item
+// NEW: Added optional onClick prop and dynamic styling for interactivity
 const PipelineItem = ({
   icon: Icon,
   label,
   value,
   color,
+  onClick,
 }: {
   icon: React.ElementType;
   label: string;
   value: number;
   color: string;
+  onClick?: () => void;
 }) => (
-  <div className="flex items-center gap-3">
+  <div 
+    onClick={onClick}
+    className={`flex items-center gap-3 ${
+      onClick 
+        ? "cursor-pointer hover:bg-on-surface/5 p-2 -m-2 rounded-2xl transition-all border border-transparent hover:border-on-surface/10" 
+        : ""
+    }`}
+  >
     <Icon className={`w-6 h-6 ${color}`} strokeWidth={1.5} />
     <div>
       <p className="text-2xl font-semibold text-on-surface">{value}</p>
