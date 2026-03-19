@@ -1,6 +1,7 @@
+// src/components/admin/harvesting/SelectPaymentCycleModal.tsx
 "use client";
 
-import React, { useState, useTransition } from "react";
+import React, { useState, useTransition, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Modal from "@/src/components/ui/Modal";
 import { CycleForPaymentSelection } from "@/src/app/admin/payments/actions";
@@ -11,6 +12,8 @@ import {
   Package,
   ChevronRight,
   LoaderCircle,
+  Search, // NEW: Imported Search icon
+  X       // NEW: Imported X icon to clear/close search
 } from "lucide-react";
 
 type SelectPaymentCycleModalProps = {
@@ -30,6 +33,10 @@ export default function SelectPaymentCycleModal({
   const [isNavigatingId, setIsNavigatingId] = useState<number | null>(null);
   const [isPending, startTransition] = useTransition();
 
+  // --- NEW: Search State ---
+  const [isSearchActive, setIsSearchActive] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+
   const handleNavigate = (cycleId: number) => {
     setIsNavigatingId(cycleId);
     startTransition(() => {
@@ -38,14 +45,67 @@ export default function SelectPaymentCycleModal({
     });
   };
 
+  // --- NEW: Local Filter Logic ---
+  const filteredCycles = useMemo(() => {
+    if (!searchQuery.trim()) return cycles;
+    return cycles.filter((cycle) =>
+      cycle.farmer_name.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [cycles, searchQuery]);
+
+  // --- NEW: Custom Header for the Modal ---
+  const ModalHeader = (
+    <div className="flex items-center justify-between w-full h-8 mr-4">
+      {isSearchActive ? (
+        <div className="flex items-center w-full bg-surface-variant/50 border border-outline/20 rounded-lg px-3 py-1.5 animate-in fade-in slide-in-from-right-4 duration-200">
+          <Search className="w-4 h-4 text-on-surface-variant mr-2 flex-shrink-0" />
+          <input
+            type="text"
+            autoFocus
+            placeholder="Search farmer name..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="bg-transparent border-none outline-none flex-grow text-sm text-on-surface placeholder:text-on-surface-variant focus:ring-0"
+          />
+          <button
+            onClick={() => {
+              setIsSearchActive(false);
+              setSearchQuery(""); // Clear search when closing bar
+            }}
+            className="p-1 hover:bg-surface-variant rounded-full text-on-surface-variant transition-colors ml-2"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      ) : (
+        <>
+          <h2 className="text-xl font-medium text-on-surface truncate">
+            Select Cycle for Payment
+          </h2>
+          <button
+            onClick={() => setIsSearchActive(true)}
+            className="p-1.5 rounded-full text-on-surface-variant hover:bg-surface-variant transition-colors ml-2 flex-shrink-0"
+            title="Search by Farmer Name"
+          >
+            <Search className="w-5 h-5" />
+          </button>
+        </>
+      )}
+    </div>
+  );
+
   return (
     <Modal
       isOpen={isOpen}
-      onClose={onClose}
-      title="Select Cycle for Farmer Payment"
+      onClose={() => {
+        onClose();
+        setIsSearchActive(false); // Reset search state on modal close
+        setSearchQuery("");
+      }}
+      title={ModalHeader} // Passed custom header here
       maxWidth="max-w-xl"
     >
-      <div className="space-y-3">
+      <div className="space-y-3 mt-2 max-h-[60vh] overflow-y-auto p-1">
         {isLoading ? (
           <div className="flex justify-center items-center py-8">
             <LoaderCircle className="w-6 h-6 animate-spin text-primary" />
@@ -53,8 +113,8 @@ export default function SelectPaymentCycleModal({
               Loading cycles ready for payment...
             </p>
           </div>
-        ) : cycles.length > 0 ? (
-          cycles.map((cycle) => (
+        ) : filteredCycles.length > 0 ? (
+          filteredCycles.map((cycle) => (
             <button
               key={cycle.crop_cycle_id}
               onClick={() => handleNavigate(cycle.crop_cycle_id)}
@@ -95,7 +155,9 @@ export default function SelectPaymentCycleModal({
           ))
         ) : (
           <p className="text-center text-on-surface-variant py-8">
-            No cycles found with &apos;Loaded&apos; status ready for payment.
+            {searchQuery 
+              ? `No farmers found matching "${searchQuery}"` 
+              : "No cycles found with 'Loaded' status ready for payment."}
           </p>
         )}
       </div>
