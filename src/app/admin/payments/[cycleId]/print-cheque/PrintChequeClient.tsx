@@ -334,8 +334,8 @@ export default function PrintChequeClient({
         /* EXACT field positioning and styles from cheque-test */
         .date-field {
           position: absolute;
-          top: 6mm;
-          left: 163mm;
+          top: 7mm;
+          left: 164mm;
           letter-spacing: 3mm;
           font-weight: bold;
           font-size: 12px;

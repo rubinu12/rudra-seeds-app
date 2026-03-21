@@ -1,3 +1,4 @@
+// src/components/admin/WelcomeHeader.tsx
 "use client";
 
 import { useState, useTransition } from 'react';
@@ -107,11 +108,11 @@ export default function WelcomeHeader({
                 isPending={loadingAction === 'edit'}
             />
             <ActionButton 
-    onClick={() => router.push('/admin/master-data')}
-    Icon={Database} 
-    label="Master Data" 
-    bgColor="bg-surface-container" 
-/>
+                onClick={() => router.push('/admin/master-data')}
+                Icon={Database} 
+                label="Master Data" 
+                bgColor="bg-surface-container" 
+            />
           </>
         )}
         
@@ -164,6 +165,14 @@ export default function WelcomeHeader({
                 label="Manage Finance"
                 bgColor="bg-tertiary-container"
                 isPending={loadingAction === 'finance'}
+             />
+
+             {/* NEW HARVEST MASTER DATA BUTTON */}
+             <ActionButton 
+                onClick={() => router.push('/admin/harvest-master')}
+                Icon={Database} 
+                label="Master Data" 
+                bgColor="bg-surface-container" 
              />
            </>
         )}
