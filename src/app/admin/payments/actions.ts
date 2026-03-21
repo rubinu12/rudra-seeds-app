@@ -1,6 +1,6 @@
 "use server";
 
-import { sql } from '@vercel/postgres';
+import { sql, db } from '@vercel/postgres';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
@@ -95,7 +95,8 @@ const ProcessPaymentSchema = z.object({
 }, { message: "Total cheque amount mismatch", path: ["cheque_details"] });
 
 
-// --- 2. PROCESS ACTION ---
+// --- 2. PROCESS ACTION (WITH RETRY & COALESCE FIX) ---
+// --- 2. PROCESS ACTION (WITH DEDICATED CONNECTION & TRANSACTIONS) ---
 export async function processFarmerPaymentAction(
     _prevState: ProcessPaymentFormState | undefined,
     formData: FormData
@@ -114,32 +115,6 @@ export async function processFarmerPaymentAction(
     const { cycleId, grossPayment, netPayment, cheque_details, seedPaymentStatus, amountRemaining } = validatedFields.data;
     const paymentDate = new Date();
 
-    // --- [AUTO-BILL LOGIC START] ---
-    const year = paymentDate.getFullYear();
-    const prefix = `${year}-B-`;
-    
-    // 1. Find the last bill number for this year
-    const lastBillRes = await sql`
-        SELECT bill_number FROM crop_cycles 
-        WHERE bill_number LIKE ${prefix + '%'}
-        ORDER BY bill_number DESC 
-        LIMIT 1
-    `;
-
-    let nextSeq = 1;
-    if (lastBillRes.rowCount && lastBillRes.rowCount > 0 && lastBillRes.rows[0].bill_number) {
-        const last = lastBillRes.rows[0].bill_number; 
-        const parts = last.split('-'); 
-        const lastNum = parseInt(parts[parts.length - 1], 10); 
-        if (!isNaN(lastNum)) {
-            nextSeq = lastNum + 1; 
-        }
-    }
-
-    // 2. Generate New Bill Number
-    const autoBillNumber = `${prefix}${String(nextSeq).padStart(3, '0')}`;
-    // --- [AUTO-BILL LOGIC END] ---
-
     const chequeDetailsForDb = cheque_details.map(cheque => ({
         payee_name: cheque.payee_name,
         cheque_number: cheque.cheque_number,
@@ -151,28 +126,73 @@ export async function processFarmerPaymentAction(
     const allDates = chequeDetailsForDb.map(c => new Date(c.due_date).getTime());
     const maxDueDateISO = formatISO(new Date(Math.max(...allDates)), { representation: 'date' });
 
+    // 1. Acquire a dedicated Postgres client from the pool (Bypasses the REST API bug)
+    const client = await db.connect();
+
     try {
-        await sql`
+        // 2. Start an isolated SQL Transaction
+        await client.sql`BEGIN`;
+
+        // --- [AUTO-BILL LOGIC START] ---
+        const year = paymentDate.getFullYear();
+        const prefix = `${year}-B-`;
+        
+        const lastBillRes = await client.sql`
+            SELECT bill_number FROM crop_cycles 
+            WHERE bill_number LIKE ${prefix + '%'}
+            ORDER BY bill_number DESC 
+            LIMIT 1
+        `;
+
+        let nextSeq = 1;
+        if (lastBillRes.rowCount && lastBillRes.rowCount > 0 && lastBillRes.rows[0].bill_number) {
+            const last = lastBillRes.rows[0].bill_number; 
+            const parts = last.split('-'); 
+            const lastNum = parseInt(parts[parts.length - 1], 10); 
+            if (!isNaN(lastNum)) {
+                nextSeq = lastNum + 1; 
+            }
+        }
+
+        const autoBillNumber = `${prefix}${String(nextSeq).padStart(3, '0')}`;
+        // --- [AUTO-BILL LOGIC END] ---
+
+        // 3. Perform the Update
+        await client.sql`
             UPDATE crop_cycles
             SET
-                bill_number = ${autoBillNumber},
+                bill_number = COALESCE(bill_number, ${autoBillNumber}),
                 total_payment = ${grossPayment},
                 final_payment = ${netPayment},
                 seed_payment_status = ${seedPaymentStatus},
                 amount_remaining = ${amountRemaining},
                 cheque_due_date = ${maxDueDateISO}, 
-                cheque_details = ${JSON.stringify(chequeDetailsForDb)},
-                status = 'paid',
+                cheque_details = ${JSON.stringify(chequeDetailsForDb)}::jsonb,
+                status = 'Paid',
                 is_farmer_paid = FALSE,
                 final_payment_date = ${formatISO(paymentDate, { representation: 'date' })}
-            WHERE crop_cycle_id = ${cycleId} AND (status = 'Loaded' OR status = 'loaded');
+            WHERE crop_cycle_id = ${cycleId} AND status IN ('Loaded', 'loaded', 'Paid', 'paid');
         `;
 
-        revalidatePath(`/admin/dashboard`);
-        revalidatePath(`/admin/payments/${cycleId}/process`);
-    } catch (_error) {
-        return { message: "Database error.", success: false, cycleId };
+        // 4. Commit the Transaction to save changes safely
+        await client.sql`COMMIT`;
+
+    } catch (error) {
+        // If anything fails, rollback the transaction so no partial data is saved
+        await client.sql`ROLLBACK`;
+        console.error("Database error during payment processing:", error);
+        return { message: "Database connection failed. Please try again.", success: false, cycleId };
+    } finally {
+        // 5. CRITICAL: Always release the client back to the pool!
+        client.release();
     }
 
+    // Bust the cache for ALL related pages so the print view gets fresh data immediately
+    revalidatePath(`/admin/dashboard`);
+    revalidatePath(`/admin/payments/${cycleId}/process`);
+    revalidatePath(`/admin/payments/${cycleId}/print-bill`);
+    revalidatePath(`/admin/payments/${cycleId}/print-cheque`);
+
+    // Redirect to printing
     redirect(`/admin/payments/${cycleId}/print-bill`);
 }

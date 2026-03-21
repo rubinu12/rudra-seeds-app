@@ -4,6 +4,7 @@
 import { sql } from '@vercel/postgres';
 
 export type HarvestMasterRow = {
+  cycleId: number; // <-- ADDED: Explicit ID for AG Grid
   billNo: string;
   variety: string;
   lotNos: string;
@@ -50,7 +51,7 @@ export async function getHarvestMasterReport(): Promise<HarvestMasterRow[]> {
     ORDER BY cc.crop_cycle_id DESC;
   `;
 
-  // --- NEW: AUTO-RETRY MECHANISM TO PREVENT NEON CRASHES ---
+  // --- AUTO-RETRY MECHANISM (Kept completely intact) ---
   let retries = 3;
   let lastError;
 
@@ -83,6 +84,7 @@ export async function getHarvestMasterReport(): Promise<HarvestMasterRow[]> {
           .join(', ') || (row.farmer_name || 'Unknown');
 
         return {
+          cycleId: Number(row.crop_cycle_id), // <-- ADDED: Map exact ID directly
           billNo: row.bill_number || `BILL-${row.crop_cycle_id}`,
           variety: row.variety_name || 'Unknown',
           lotNos: row.lot_no || '',
@@ -105,17 +107,16 @@ export async function getHarvestMasterReport(): Promise<HarvestMasterRow[]> {
       retries--;
       if (retries > 0) {
           console.warn(`[Neon DB] Connection dropped. Waking up database... Retrying in 1.5s (${retries} attempts left)`);
-          await new Promise(resolve => setTimeout(resolve, 1500)); // Wait 1.5 seconds before trying again
+          await new Promise(resolve => setTimeout(resolve, 1500)); 
       }
     }
   }
 
-  // If it fails 3 times in a row, then throw the error to the UI
   console.error("Harvest Master Report Error after 3 attempts:", lastError);
   throw new Error("Failed to load Harvest Master Data. Please check your internet connection.");
 }
 
-// --- NEW INLINE EDITING ACTION (WITH FIXES) ---
+// --- INLINE EDITING ACTION (Kept completely intact) ---
 export async function updateHarvestInlineField(cycleId: number, field: string, newValue: string) {
   let retries = 3;
   let lastError;
@@ -132,7 +133,6 @@ export async function updateHarvestInlineField(cycleId: number, field: string, n
          await sql`UPDATE farmers SET mobile_number = ${cleanValue} WHERE farmer_id = ${farmerId}`;
       } 
       else if (field === 'bankAccountName') {
-         // FIX: Using "SELECT 1" prevents the "column does not exist" error
          const checkBank = await sql`SELECT 1 FROM bank_accounts WHERE farmer_id = ${farmerId} LIMIT 1`;
          if ((checkBank.rowCount ?? 0) > 0) {
              await sql`UPDATE bank_accounts SET account_name = ${cleanValue} WHERE farmer_id = ${farmerId}`;
@@ -171,7 +171,6 @@ export async function updateHarvestInlineField(cycleId: number, field: string, n
     } catch (error: any) {
       lastError = error;
       
-      // FIX: Auto-retry ONLY if it's a Neon connection timeout
       if (error.message?.includes('fetch failed') || error.message?.includes('ENOTFOUND')) {
           retries--;
           if (retries > 0) {
@@ -181,7 +180,6 @@ export async function updateHarvestInlineField(cycleId: number, field: string, n
           }
       }
       
-      // If it's a real SQL syntax error, log it and break the loop
       console.error("Inline Update Error:", error);
       return { success: false, message: 'Database error during update.' };
     }

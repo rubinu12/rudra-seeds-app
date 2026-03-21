@@ -139,107 +139,126 @@ export async function getChequePrintDetails(cycleId: number): Promise<ChequePrin
 export async function getFarmerPaymentDetails(cycleId: number): Promise<FarmerPaymentDetails | null> {
     if (isNaN(cycleId) || cycleId <= 0) return null;
 
-    try {
-        const cycleResult = await sql`
-            SELECT
-                cc.crop_cycle_id,
-                cc.farmer_id,
-                cc.quantity_in_bags,
-                cc.purchase_rate,
-                cc.amount_remaining,
-                cc.seed_cost,            
-                cc.seed_payment_status,
-                cc.cheque_details,
-                cc.lot_no,
-                cc.bill_number, -- [NEW] Fetching Bill Number
-                TO_CHAR(cc.final_payment_date, 'YYYY-MM-DD') as final_payment_date,
-                TO_CHAR(cc.loading_date, 'YYYY-MM-DD') as loading_date,
-                f.name as farmer_name,
-                v.village_name,
-                s.variety_name as seed_variety,
-                ship.vehicle_number,
-                TO_CHAR(ship.dispatch_date, 'YYYY-MM-DD') as dispatch_date
-            FROM crop_cycles cc
-            JOIN farmers f ON cc.farmer_id = f.farmer_id
-            JOIN farms fa ON cc.farm_id = fa.farm_id
-            JOIN villages v ON fa.village_id = v.village_id
-            JOIN seeds s ON cc.seed_id = s.seed_id
-            LEFT JOIN (
-                SELECT DISTINCT ON (si.crop_cycle_id) si.crop_cycle_id, sh.shipment_id, sh.vehicle_number, sh.dispatch_date
-                FROM shipment_items si
-                JOIN shipments sh ON si.shipment_id = sh.shipment_id
-                WHERE si.crop_cycle_id = ${cycleId}
-                ORDER BY si.crop_cycle_id, sh.dispatch_date DESC NULLS LAST, sh.creation_date DESC NULLS LAST
-            ) as latest_shipment ON cc.crop_cycle_id = latest_shipment.crop_cycle_id
-            LEFT JOIN shipments ship ON latest_shipment.shipment_id = ship.shipment_id
-            
-            WHERE cc.crop_cycle_id = ${cycleId}
-              AND (cc.status = 'paid' OR cc.status = 'Paid' OR cc.status = 'Cheque Generated' OR cc.status = 'Cleared' OR cc.status = 'Loaded');
-        `;
+    let retries = 3;
+    let lastError;
 
-        if (cycleResult.rowCount === 0) return null;
+    while (retries > 0) {
+        try {
+            const cycleResult = await sql`
+                SELECT
+                    cc.crop_cycle_id,
+                    cc.farmer_id,
+                    cc.quantity_in_bags,
+                    cc.purchase_rate,
+                    cc.amount_remaining,
+                    cc.seed_cost,            
+                    cc.seed_payment_status,
+                    cc.cheque_details,
+                    cc.lot_no,
+                    cc.bill_number,
+                    TO_CHAR(cc.final_payment_date, 'YYYY-MM-DD') as final_payment_date,
+                    TO_CHAR(cc.loading_date, 'YYYY-MM-DD') as loading_date,
+                    f.name as farmer_name,
+                    v.village_name,
+                    s.variety_name as seed_variety,
+                    ship.vehicle_number,
+                    TO_CHAR(ship.dispatch_date, 'YYYY-MM-DD') as dispatch_date
+                FROM crop_cycles cc
+                JOIN farmers f ON cc.farmer_id = f.farmer_id
+                JOIN farms fa ON cc.farm_id = fa.farm_id
+                JOIN villages v ON fa.village_id = v.village_id
+                JOIN seeds s ON cc.seed_id = s.seed_id
+                LEFT JOIN (
+                    SELECT DISTINCT ON (si.crop_cycle_id) si.crop_cycle_id, sh.shipment_id, sh.vehicle_number, sh.dispatch_date
+                    FROM shipment_items si
+                    JOIN shipments sh ON si.shipment_id = sh.shipment_id
+                    WHERE si.crop_cycle_id = ${cycleId}
+                    ORDER BY si.crop_cycle_id, sh.dispatch_date DESC NULLS LAST, sh.creation_date DESC NULLS LAST
+                ) as latest_shipment ON cc.crop_cycle_id = latest_shipment.crop_cycle_id
+                LEFT JOIN shipments ship ON latest_shipment.shipment_id = ship.shipment_id
+                
+                WHERE cc.crop_cycle_id = ${cycleId}
+                  AND (cc.status = 'paid' OR cc.status = 'Paid' OR cc.status = 'Cheque Generated' OR cc.status = 'Cleared' OR cc.status = 'Loaded');
+            `;
 
-        const cycleData = cycleResult.rows[0];
-        const farmerId = Number(cycleData.farmer_id);
+            if (cycleResult.rowCount === 0) return null;
 
-        const bankAccountsResult = await sql<BankAccount>`
-            SELECT account_id, farmer_id, account_name, account_no, ifsc_code, bank_name
-            FROM bank_accounts
-            WHERE farmer_id = ${farmerId};
-        `;
+            const cycleData = cycleResult.rows[0];
+            const farmerId = Number(cycleData.farmer_id);
 
-        let cheques: StoredChequeDetail[] = [];
-        if (cycleData.cheque_details) {
-            try {
-                if (typeof cycleData.cheque_details === 'string') {
-                    cheques = JSON.parse(cycleData.cheque_details);
-                } else if (typeof cycleData.cheque_details === 'object') {
-                    cheques = cycleData.cheque_details as StoredChequeDetail[];
+            const bankAccountsResult = await sql<BankAccount>`
+                SELECT account_id, farmer_id, account_name, account_no, ifsc_code, bank_name
+                FROM bank_accounts
+                WHERE farmer_id = ${farmerId};
+            `;
+
+            let cheques: StoredChequeDetail[] = [];
+            if (cycleData.cheque_details) {
+                try {
+                    if (typeof cycleData.cheque_details === 'string') {
+                        cheques = JSON.parse(cycleData.cheque_details);
+                    } else if (typeof cycleData.cheque_details === 'object') {
+                        cheques = cycleData.cheque_details as StoredChequeDetail[];
+                    }
+                    if (!Array.isArray(cheques)) throw new Error("Not an array");
+                    cheques = cheques.map(ch => ({ ...ch, amount: Number(ch.amount) }));
+                } catch (_e) {
+                    cheques = [];
                 }
-                if (!Array.isArray(cheques)) throw new Error("Not an array");
-                cheques = cheques.map(ch => ({ ...ch, amount: Number(ch.amount) }));
-            } catch (_e) {
-                cheques = [];
             }
+
+            const bagsWeighed = Number(cycleData.quantity_in_bags ?? 0);
+            const purchaseRatePerMan = Number(cycleData.purchase_rate ?? 0);
+            const seedDeduction = Number(cycleData.amount_remaining ?? 0);
+            const grossPayment = bagsWeighed * purchaseRatePerMan * 2.5;
+            const netPayment = grossPayment - seedDeduction;
+
+            return {
+                lot_no: cycleData.lot_no,
+                bill_number: cycleData.bill_number as string | null,
+                loading_date: cycleData.loading_date as string | null,
+                final_payment: netPayment,
+                total_payment: netPayment,
+                crop_cycle_id: Number(cycleData.crop_cycle_id),
+                farmer_id: farmerId,
+                quantity_in_bags: bagsWeighed,
+                purchase_rate: purchaseRatePerMan,
+                amount_remaining: seedDeduction,
+                farmer_name: cycleData.farmer_name,
+                village_name: cycleData.village_name,
+                seed_variety: cycleData.seed_variety,
+                seed_cost: Number(cycleData.seed_cost ?? 0),
+                seed_payment_status: cycleData.seed_payment_status as string | null,
+                final_payment_date: cycleData.final_payment_date as string | null,
+                vehicle_number: cycleData.vehicle_number as string | null,
+                dispatch_date: cycleData.dispatch_date as string | null,
+                cheque_details: cheques,
+                bank_accounts: bankAccountsResult.rows.map(acc => ({
+                    ...acc,
+                    account_id: Number(acc.account_id),
+                    farmer_id: Number(acc.farmer_id),
+                })),
+                gross_payment: grossPayment,
+                net_payment: netPayment,
+            };
+
+        } catch (error: any) {
+            lastError = error;
+            
+            // Auto-retry ONLY if it's a Neon connection timeout
+            if (error.message?.includes('fetch failed') || error.message?.includes('ENOTFOUND')) {
+                retries--;
+                if (retries > 0) {
+                    console.warn(`[Neon DB Fetch] Connection dropped. Retrying in 1s... (${retries} attempts left)`);
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    continue;
+                }
+            }
+            
+            console.error(`Database Error fetching payment details for cycle ${cycleId}:`, error);
+            throw new Error('Failed to fetch farmer payment details.');
         }
-
-        const bagsWeighed = Number(cycleData.quantity_in_bags ?? 0);
-        const purchaseRatePerMan = Number(cycleData.purchase_rate ?? 0);
-        const seedDeduction = Number(cycleData.amount_remaining ?? 0);
-        const grossPayment = bagsWeighed * purchaseRatePerMan * 2.5;
-        const netPayment = grossPayment - seedDeduction;
-
-        return {
-            lot_no: cycleData.lot_no,
-            bill_number: cycleData.bill_number as string | null, // [NEW] Return mapped bill_number
-            loading_date: cycleData.loading_date as string | null,
-            final_payment: netPayment,
-            total_payment: netPayment,
-            crop_cycle_id: Number(cycleData.crop_cycle_id),
-            farmer_id: farmerId,
-            quantity_in_bags: bagsWeighed,
-            purchase_rate: purchaseRatePerMan,
-            amount_remaining: seedDeduction,
-            farmer_name: cycleData.farmer_name,
-            village_name: cycleData.village_name,
-            seed_variety: cycleData.seed_variety,
-            seed_cost: Number(cycleData.seed_cost ?? 0),                      // <-- NEW
-            seed_payment_status: cycleData.seed_payment_status as string | null,
-            final_payment_date: cycleData.final_payment_date as string | null,
-            vehicle_number: cycleData.vehicle_number as string | null,
-            dispatch_date: cycleData.dispatch_date as string | null,
-            cheque_details: cheques,
-            bank_accounts: bankAccountsResult.rows.map(acc => ({
-                ...acc,
-                account_id: Number(acc.account_id),
-                farmer_id: Number(acc.farmer_id),
-            })),
-            gross_payment: grossPayment,
-            net_payment: netPayment,
-        };
-
-    } catch (error) {
-        console.error(`Database Error fetching payment details for cycle ${cycleId}:`, error);
-        throw new Error('Failed to fetch farmer payment details.');
     }
+
+    return null;
 }

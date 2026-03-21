@@ -11,7 +11,7 @@ import { getHarvestMasterReport, updateHarvestInlineField, HarvestMasterRow } fr
 
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
-import toast from 'react-hot-toast'; 
+import toast, { Toaster } from 'react-hot-toast'; // IMPORTED TOASTER HERE
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -19,6 +19,10 @@ export default function HarvestMasterGrid() {
     const [rowData, setRowData] = useState<HarvestMasterRow[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const gridApiRef = useRef<GridApi | null>(null);
+    
+    // --- THE CIRCUIT BREAKER ---
+    // This physically stops AG Grid from triggering an infinite edit loop when we revert a failed save
+    const isReverting = useRef(false);
 
     useEffect(() => {
         async function loadData() {
@@ -26,7 +30,6 @@ export default function HarvestMasterGrid() {
                 const data = await getHarvestMasterReport();
                 setRowData(data);
             } catch (error) {
-                console.error("Failed to load data", error);
                 toast.error("Failed to load ledger data.");
             } finally {
                 setIsLoading(false);
@@ -39,34 +42,42 @@ export default function HarvestMasterGrid() {
         gridApiRef.current = params.api;
     }, []);
 
+    // --- HANDLE INLINE EDITING ---
     const handleCellValueChanged = async (event: CellValueChangedEvent) => {
+        // 1. Circuit Breaker: If we are currently undoing a failed save, DO NOT trigger another save!
+        if (isReverting.current) return;
+        
+        // 2. Ignore if the user clicked the cell but didn't actually change the text
         if (event.oldValue === event.newValue) return;
 
-        let cycleId = 0;
-        if (event.data.billNo.startsWith('BILL-')) {
-            cycleId = parseInt(event.data.billNo.replace('BILL-', ''));
-        } else {
-             cycleId = parseInt(event.data.billNo.replace(/\D/g, '')); 
-        }
-
+        // 3. Grab the explicit DB ID we added to the Server Action
+        const cycleId = event.data.cycleId; 
         const field = event.colDef.field;
         const newValue = event.newValue;
 
         if (!field || !cycleId) return;
 
-        const loadingToast = toast.loading('Saving changes...');
+        const loadingToast = toast.loading('Syncing to Database...');
         
         try {
             const result = await updateHarvestInlineField(cycleId, field, newValue);
             if (result.success) {
-                toast.success('Updated successfully!', { id: loadingToast });
+                toast.success('Database updated successfully!', { id: loadingToast, duration: 3000 });
             } else {
-                toast.error(result.message || 'Update failed.', { id: loadingToast });
+                toast.error(result.message || 'Update failed.', { id: loadingToast, duration: 4000 });
+                
+                // SAFELY REVERT THE CELL ON FAILURE
+                isReverting.current = true; // Engage Circuit Breaker
                 event.node.setDataValue(field, event.oldValue);
+                setTimeout(() => { isReverting.current = false; }, 50); // Disengage after UI updates
             }
         } catch (error) {
-            toast.error('Network error during save.', { id: loadingToast });
+            toast.error('Network error. Edit reverted.', { id: loadingToast });
+            
+            // SAFELY REVERT THE CELL ON CRASH
+            isReverting.current = true;
             event.node.setDataValue(field, event.oldValue);
+            setTimeout(() => { isReverting.current = false; }, 50);
         }
     };
 
@@ -86,19 +97,22 @@ export default function HarvestMasterGrid() {
           }
         },
         { headerName: 'Farmer Name', field: 'farmerName', filter: 'agTextColumnFilter', sortable: true, minWidth: 200 },
+        
+        // Editable Fields
         { headerName: 'Mobile Number ✎', field: 'mobileNumber', filter: 'agTextColumnFilter', sortable: true, minWidth: 150, editable: true, cellStyle: editableCellStyle },
         { headerName: 'Bank Acc Name ✎', field: 'bankAccountName', filter: 'agTextColumnFilter', sortable: true, minWidth: 200, editable: true, cellStyle: editableCellStyle },
         { headerName: 'Lot No(s) ✎', field: 'lotNos', filter: 'agTextColumnFilter', sortable: true, minWidth: 150, editable: true, cellStyle: editableCellStyle },
+        
         { headerName: 'Variety', field: 'variety', filter: 'agTextColumnFilter', sortable: true, minWidth: 150 },
         { headerName: 'Bags', field: 'bags', filter: 'agNumberColumnFilter', sortable: true, minWidth: 100 },
         { headerName: 'Weight (Man)', field: 'weightInMan', filter: 'agNumberColumnFilter', sortable: true, minWidth: 130 },
         { headerName: 'Rate (/Man)', field: 'purchaseRate', filter: 'agNumberColumnFilter', sortable: true, minWidth: 130, valueFormatter: currencyFormatter },
         { headerName: 'Amount', field: 'amount', filter: 'agNumberColumnFilter', sortable: true, minWidth: 150, valueFormatter: currencyFormatter },
-        
-        // --- NEW PAYEE NAME COLUMN ---
         { headerName: 'Payee Name(s)', field: 'chequeName', filter: 'agTextColumnFilter', sortable: true, minWidth: 200 },
         
+        // Editable Cheque Fields
         { headerName: 'Cheque No(s) ✎', field: 'chequeNumbers', filter: 'agTextColumnFilter', sortable: true, minWidth: 160, editable: true, cellStyle: editableCellStyle },
+        
         { headerName: 'Due Date(s)', field: 'chequeDueDates', filter: 'agTextColumnFilter', sortable: true, minWidth: 150 }
     ];
 
@@ -141,7 +155,11 @@ export default function HarvestMasterGrid() {
     };
 
     return (
-        <div className="flex flex-col h-full w-full bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+        <div className="flex flex-col h-full w-full bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden relative">
+            
+            {/* THE FIX: TOASTER ADDED HERE TO MAKE NOTIFICATIONS VISIBLE */}
+            <Toaster position="top-center" reverseOrder={false} />
+
             <div className="flex justify-between items-center p-4 border-b border-slate-100 bg-slate-50">
                 <h2 className="text-lg font-bold text-slate-800">Harvest & Financial Ledger Grid</h2>
                 <div className="flex space-x-3">
@@ -155,7 +173,6 @@ export default function HarvestMasterGrid() {
                 </div>
             </div>
 
-            {/* Added min-h-[600px] to force the container to expand and show at least 10 rows */}
             <div className="ag-theme-alpine w-full h-full flex-1 min-h-[600px]">
                 {isLoading ? (
                     <div className="flex items-center justify-center h-full text-slate-500 font-medium">
@@ -171,11 +188,8 @@ export default function HarvestMasterGrid() {
                         onCellValueChanged={handleCellValueChanged}
                         rowSelection="multiple"
                         animateRows={true}
-                        
-                        /* UPDATED: Pagination is now set to 100 entries per page */
                         pagination={true}
                         paginationPageSize={100}
-                        
                         stopEditingWhenCellsLoseFocus={true} 
                     />
                 )}
